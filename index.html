@@ -2756,7 +2756,7 @@ const m4 = {
 };
 
 
-const MAT = { PLAIN: -1, ASPHALT: -2, GRASS: -3, CONCRETE: -4, BUILDING: -5, PAINT: -6, GLASS: -7, LEAF: -8, ROADPAINT: -9, TIRE: -10, METAL: -11, ROOF: -12 };
+const MAT = { PLAIN: -1, ASPHALT: -2, GRASS: -3, CONCRETE: -4, BUILDING: -5, PAINT: -6, GLASS: -7, LEAF: -8, ROADPAINT: -9, TIRE: -10, METAL: -11, ROOF: -12, INT: -13 };
 m4.ortho = (l, r, b, t, n, f) => new Float32Array([2 / (r - l), 0, 0, 0, 0, 2 / (t - b), 0, 0, 0, 0, -2 / (f - n), 0, -(r + l) / (r - l), -(t + b) / (t - b), -(f + n) / (f - n), 1]);
 
 const VS = `
@@ -2771,7 +2771,7 @@ precision highp float;
 precision mediump float;
 #endif
 varying vec3 vPos; varying vec3 vNor; varying vec3 vCol; varying vec2 vUV; varying vec4 vSh; varying float vDist;
-uniform sampler2D uTex; uniform sampler2D uNoise; uniform sampler2D uShadow;
+uniform sampler2D uTex; uniform sampler2D uNoise; uniform sampler2D uShadow; uniform sampler2D uDyn; uniform sampler2D uMir; uniform float uSunK;
 uniform vec3 uSun; uniform vec3 uSunCol; uniform float uSunI; uniform float uAmbI; uniform vec3 uSkyCol; uniform vec3 uGndCol; uniform vec3 uFogCol; uniform float uFogDen;
 uniform float uDbg; uniform vec3 uCam; uniform float uShOn; uniform float uShTexel; uniform float uBias; uniform float uTime;
 vec3 lin(vec3 c){ return pow(c, vec3(2.2)); }
@@ -2791,6 +2791,8 @@ float shadowF(float ndl){
 }
 void main(){
   vec3 alb; float m = 1.0; bool tx = false;
+  if (vUV.x >= 4.0) { vec3 t = texture2D(uMir, vUV - vec2(4.0, 0.0)).rgb; gl_FragColor = vec4(t * vCol * 0.97, 1.0); return; }
+  if (vUV.x >= 2.0) { vec3 t = texture2D(uDyn, vUV - vec2(2.0, 0.0)).rgb; gl_FragColor = vec4(t * vCol, 1.0); return; }
   if (vUV.x >= 0.0) { vec4 t = texture2D(uTex, vUV); if (t.a < 0.4) discard; alb = lin(t.rgb * vCol); tx = true; }
   else { alb = lin(vCol); m = -vUV.y; }
   float nl = length(vNor);
@@ -2822,11 +2824,12 @@ void main(){
         }
       }
       else if (abs(m - 12.0) < 0.5) { alb *= 0.75 + 0.3 * nG(wp * 0.6); }
+      else if (abs(m - 13.0) < 0.5) { alb *= 0.86 + 0.28 * nR(vPos.xy * 26.0 + vPos.zz * 19.0) ; kind = 5.0; }
       else if (abs(m - 6.0) < 0.5) kind = 1.0;
       else if (abs(m - 7.0) < 0.5) kind = 2.0;
       else if (abs(m - 11.0) < 0.5) kind = 4.0;
     }
-    float ndl = max(dot(N, uSun), 0.0);
+    float ndl = max(dot(N, uSun), 0.0) * uSunK;
     float sh = 1.0; if (uShOn > 0.5 && ndl > 0.0) sh = shadowF(ndl);
     vec3 amb = mix(uGndCol, uSkyCol, N.y * 0.5 + 0.5) * uAmbI;
     if (uDbg > 0.5) { vec3 sc0 = vSh.xyz / vSh.w * 0.5 + 0.5; gl_FragColor = vec4(sh, sc0.z, ndl, 1.0); return; }
@@ -2837,7 +2840,8 @@ void main(){
     } else if (kind == 2.0 || kind == 3.0) { // 유리
       vec3 H = normalize(uSun + V); float s = pow(max(dot(N, H), 0.0), 120.0); float fr = pow(1.0 - max(dot(N, V), 0.0), 3.0);
       col = mix(col, skyAt(R) * 0.7, (kind == 2.0 ? 0.35 : 0.0) + 0.5 * fr) + uSunCol * s * sh * (kind == 2.0 ? 1.5 : 0.8);
-    } else if (kind == 4.0) { vec3 H = normalize(uSun + V); col += uSunCol * pow(max(dot(N, H), 0.0), 30.0) * sh * 0.5 * uSunI * 0.3; }
+    } else if (kind == 5.0) { vec3 H = normalize(uSun + V); col += uSunCol * uSunI * pow(max(dot(N, H), 0.0), 18.0) * 0.05 * uSunK; }
+    else if (kind == 4.0) { vec3 H = normalize(uSun + V); col += uSunCol * pow(max(dot(N, H), 0.0), 30.0) * sh * 0.5 * uSunI * 0.3; }
   }
   float f = 1.0 - exp(-pow(distance(vPos, uCam) * uFogDen, 1.35));
   col = mix(col, uFogCol, clamp(f, 0.0, 1.0));
@@ -2946,6 +2950,43 @@ class Builder {
     }
     this.mat = m;
   }
+  // 방향 박스: 중심 c, 반축 벡터 ax/ay/az (각 면의 법선 = 축 방향). o.cTop: +ay 면 색, o.emissive
+  obox(c, ax, ay, az, col, o = {}) {
+    const E = (i, j, k) => [c[0] + ax[0] * i + ay[0] * j + az[0] * k, c[1] + ax[1] * i + ay[1] * j + az[1] * k, c[2] + ax[2] * i + ay[2] * j + az[2] * k];
+    const nz = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }; const ng = (v) => [-v[0], -v[1], -v[2]];
+    const nx = nz(ax), ny = nz(ay), nzz = nz(az); const N = (n) => (o.emissive ? [0, 0, 0] : n);
+    this.quad(E(1, -1, -1), E(1, 1, -1), E(1, 1, 1), E(1, -1, 1), N(nx), o.cFront || col);
+    this.quad(E(-1, -1, -1), E(-1, 1, -1), E(-1, 1, 1), E(-1, -1, 1), N(ng(nx)), o.cBack || col);
+    this.quad(E(-1, 1, -1), E(1, 1, -1), E(1, 1, 1), E(-1, 1, 1), N(ny), o.cTop || col);
+    if (!o.noBottom) this.quad(E(-1, -1, -1), E(1, -1, -1), E(1, -1, 1), E(-1, -1, 1), N(ng(ny)), o.cBot || col);
+    this.quad(E(-1, -1, 1), E(1, -1, 1), E(1, 1, 1), E(-1, 1, 1), N(nzz), o.cSideP || col);
+    this.quad(E(-1, -1, -1), E(1, -1, -1), E(1, 1, -1), E(-1, 1, -1), N(ng(nzz)), o.cSideN || col);
+  }
+  // p0→p1 를 잇는 각재. s: 폭 방향 기준 벡터, w 폭, t 두께
+  beam(p0, p1, s, w, t, col, o = {}) {
+    const d = [(p1[0] - p0[0]) / 2, (p1[1] - p0[1]) / 2, (p1[2] - p0[2]) / 2]; const l = Math.hypot(...d) || 1; const dn = [d[0] / l, d[1] / l, d[2] / l];
+    let a = [dn[1] * s[2] - dn[2] * s[1], dn[2] * s[0] - dn[0] * s[2], dn[0] * s[1] - dn[1] * s[0]]; const al = Math.hypot(...a) || 1; a = [a[0] / al, a[1] / al, a[2] / al];
+    const b = [dn[1] * a[2] - dn[2] * a[1], dn[2] * a[0] - dn[0] * a[2], dn[0] * a[1] - dn[1] * a[0]];
+    this.obox([(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2], d, b.map((v) => v * w / 2), a.map((v) => v * t / 2), col, o);
+  }
+  // 로컬 정점 배열을 회전 M(행우선 3x3)+이동 t 로 변환해 이 빌더에 추가
+  addXf(src, M, t, pivot) {
+    const px = pivot ? pivot[0] : 0, py = pivot ? pivot[1] : 0, pz = pivot ? pivot[2] : 0;
+    for (let i = 0; i < src.length; i += STRIDE) {
+      const x = src[i] - px, y = src[i + 1] - py, z = src[i + 2] - pz, nx = src[i + 3], ny = src[i + 4], nz = src[i + 5];
+      this.a.push(M[0] * x + M[1] * y + M[2] * z + t[0], M[3] * x + M[4] * y + M[5] * z + t[1], M[6] * x + M[7] * y + M[8] * z + t[2],
+        M[0] * nx + M[1] * ny + M[2] * nz, M[3] * nx + M[4] * ny + M[5] * nz, M[6] * nx + M[7] * ny + M[8] * nz, src[i + 6], src[i + 7], src[i + 8], src[i + 9], src[i + 10]);
+    }
+  }
+  // 토러스(핸들 림): 로컬 평면 xy, 법선 z
+  torus(R, r, seg, tube, col) {
+    const P = (a, b) => { const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b); return { p: [ca * (R + r * cb), sa * (R + r * cb), r * sb], n: [ca * cb, sa * cb, sb] }; };
+    for (let i = 0; i < seg; i++) for (let j = 0; j < tube; j++) {
+      const a0 = (i / seg) * Math.PI * 2, a1 = ((i + 1) / seg) * Math.PI * 2, b0 = (j / tube) * Math.PI * 2, b1 = ((j + 1) / tube) * Math.PI * 2;
+      const A = P(a0, b0), B = P(a1, b0), C = P(a1, b1), D = P(a0, b1); const sh = 0.8 + 0.2 * Math.cos(a0 * 1.0); const cc = [col[0] * sh, col[1] * sh, col[2] * sh];
+      this.v(...A.p, ...A.n, cc); this.v(...B.p, ...B.n, cc); this.v(...C.p, ...C.n, cc); this.v(...A.p, ...A.n, cc); this.v(...C.p, ...C.n, cc); this.v(...D.p, ...D.n, cc);
+    }
+  }
   float32() { return new Float32Array(this.a); }
 }
 
@@ -2967,7 +3008,7 @@ class GL3D {
     const uniforms = (p, names) => { const o = {}; for (const n of names) o[n] = gl.getUniformLocation(p, n); return o; };
     this.p = prog(VS, FS); this.pd = prog(VS_D, FS_D); this.ps = prog(VS_S, FS_S);
     this.loc = { pos: gl.getAttribLocation(this.p, 'aPos'), nor: gl.getAttribLocation(this.p, 'aNor'), col: gl.getAttribLocation(this.p, 'aCol'), uv: gl.getAttribLocation(this.p, 'aUV'),
-      ...uniforms(this.p, ['uVP', 'uShVP', 'uCam', 'uTex', 'uNoise', 'uShadow', 'uSun', 'uSunCol', 'uSunI', 'uAmbI', 'uSkyCol', 'uGndCol', 'uFogCol', 'uFogDen', 'uShOn', 'uShTexel', 'uBias', 'uTime', 'uDbg']) };
+      ...uniforms(this.p, ['uVP', 'uShVP', 'uCam', 'uTex', 'uNoise', 'uShadow', 'uSun', 'uSunCol', 'uSunI', 'uAmbI', 'uSkyCol', 'uGndCol', 'uFogCol', 'uFogDen', 'uShOn', 'uShTexel', 'uBias', 'uTime', 'uDbg', 'uDyn', 'uMir', 'uSunK']) };
     this.locD = { pos: gl.getAttribLocation(this.pd, 'aPos'), uVP: gl.getUniformLocation(this.pd, 'uVP') };
     this.locS = { p: gl.getAttribLocation(this.ps, 'aP'), ...uniforms(this.ps, ['uRight', 'uUp', 'uFwd', 'uTan', 'uFlip', 'uSun', 'uSkyCol', 'uFogCol', 'uNoise', 'uTime']) };
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
@@ -2982,7 +3023,7 @@ class GL3D {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     gl.activeTexture(gl.TEXTURE0);
-    this._initShadow();
+    this._initShadow(); this._initInterior();
     // 하늘용 전체화면 삼각형
     this.skyBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, this.skyBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     this.lightVP = new Float32Array(16); this.shadowOn = false;
@@ -3051,17 +3092,32 @@ class GL3D {
     gl.enableVertexAttribArray(L.p); gl.vertexAttribPointer(L.p, 2, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.TRIANGLES, 0, 3); gl.disableVertexAttribArray(L.p);
     gl.activeTexture(gl.TEXTURE0); gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
   }
-  begin(vp, cam) {
+  // o: { sun, sky, gnd, amb, sunI, sunK, fog, shadow } — 실내 패스에서 덮어씀
+  begin(vp, cam, o = {}) {
     const gl = this.gl; const L = this.loc; gl.useProgram(this.p);
     gl.uniformMatrix4fv(L.uVP, false, vp); gl.uniformMatrix4fv(L.uShVP, false, this.lightVP); gl.uniform3f(L.uCam, cam[0], cam[1], cam[2]);
-    gl.uniform3fv(L.uSun, this.sun); gl.uniform3fv(L.uSunCol, this.sunCol); gl.uniform1f(L.uSunI, this.sunI); gl.uniform1f(L.uAmbI, this.ambI);
-    gl.uniform3fv(L.uSkyCol, this.skyCol); gl.uniform3fv(L.uGndCol, this.gndCol); gl.uniform3fv(L.uFogCol, this.fogCol); gl.uniform1f(L.uFogDen, this.fogDen);
-    gl.uniform1f(L.uShOn, this.shadowOn ? 1 : 0); gl.uniform1f(L.uShTexel, this.shadowRes ? 1 / this.shadowRes : 0); gl.uniform1f(L.uBias, 0.12 / 440); gl.uniform1f(L.uDbg, window.__dbgShadow ? 1 : 0); gl.uniform1f(L.uTime, this.time);
+    gl.uniform3fv(L.uSun, o.sun || this.sun); gl.uniform3fv(L.uSunCol, this.sunCol); gl.uniform1f(L.uSunI, o.sunI ?? this.sunI); gl.uniform1f(L.uAmbI, o.amb ?? this.ambI); gl.uniform1f(L.uSunK, o.sunK ?? 1);
+    gl.uniform3fv(L.uSkyCol, o.sky || this.skyCol); gl.uniform3fv(L.uGndCol, o.gnd || this.gndCol); gl.uniform3fv(L.uFogCol, this.fogCol); gl.uniform1f(L.uFogDen, o.fog ?? this.fogDen);
+    gl.uniform1f(L.uShOn, o.shadow === false ? 0 : (this.shadowOn ? 1 : 0)); gl.uniform1f(L.uShTexel, this.shadowRes ? 1 / this.shadowRes : 0); gl.uniform1f(L.uBias, 0.12 / 440); gl.uniform1f(L.uDbg, window.__dbgShadow ? 1 : 0); gl.uniform1f(L.uTime, this.time);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex); gl.uniform1i(L.uTex, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.noise); gl.uniform1i(L.uNoise, 1);
     if (this.shadowOk) { gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.shadowDepth); gl.uniform1i(L.uShadow, 2); }
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.dynTex); gl.uniform1i(L.uDyn, 3);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, o.noMir ? this.nullTex : this.mirTex); gl.uniform1i(L.uMir, 4);
     gl.activeTexture(gl.TEXTURE0);
   }
+  // --- 실내: 동적 텍스처(계기판/센터스크린 캔버스)와 거울 렌더 타깃
+  _initInterior() {
+    const gl = this.gl; const mk = (unit, w, h) => { gl.activeTexture(unit); const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v); return t; };
+    this.dynTex = mk(gl.TEXTURE3, 4, 4); this.nullTex = mk(gl.TEXTURE4, 2, 2); this.mirW = 1024; this.mirH = 384; this.mirTex = mk(gl.TEXTURE4, this.mirW, this.mirH);
+    this.mirFB = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, this.mirFB);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.mirTex, 0);
+    const rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, this.mirW, this.mirH); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+    this.mirOk = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE; gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.activeTexture(gl.TEXTURE0);
+  }
+  updateDyn(cv) { const gl = this.gl; gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.dynTex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv); gl.activeTexture(gl.TEXTURE0); }
+  mirrorBegin() { const gl = this.gl; gl.bindFramebuffer(gl.FRAMEBUFFER, this.mirFB); gl.enable(gl.SCISSOR_TEST); }
+  mirrorEnd() { const gl = this.gl; gl.disable(gl.SCISSOR_TEST); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
   draw(m, polyOffset = false) {
     if (!m || !m.count) return;
     const gl = this.gl, L = this.loc, S = STRIDE * 4;
@@ -3079,6 +3135,291 @@ class GL3D {
 const hex3 = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
 
 return { STRIDE, m4, MAT, Builder, GL3D, hex3 };
+})();
+
+// ===== js/ui/interior.js =====
+__m["js/ui/interior.js"] = (() => {
+// 3D 실내(좌핸들): 대시·계기판·핸들·문·좌석·필러·미러 를 전부 지오메트리로 만든다.
+// 좌표계(실내): 원점 = 운전자 눈, x = 차 앞, y = 위, z = 차 오른쪽. 차량 중심선 z = CZ(운전석이 왼쪽).
+const { Builder, MAT, STRIDE } = __m["js/ui/gl3d.js"];
+
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const nrm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+const CZ = 0.38; // 차량 중심선 (운전자 눈 기준 오른쪽으로)
+const DYN = { W: 1024, H: 512, cluster: { x: 0, y: 0, w: 768, h: 282 }, screen: { x: 0, y: 290, w: 320, h: 164 } };
+const MIR = { W: 1024, H: 384, rear: { x: 0, y: 0, w: 512, h: 160 }, left: { x: 0, y: 168, w: 320, h: 200 }, right: { x: 340, y: 168, w: 320, h: 200 } };
+
+const C = {
+  dash: [0.25, 0.26, 0.29], dashTop: [0.32, 0.33, 0.36], black: [0.07, 0.07, 0.08], trim: [0.2, 0.2, 0.22], door: [0.34, 0.33, 0.36], door2: [0.43, 0.42, 0.45],
+  head: [0.84, 0.82, 0.76], headD: [0.7, 0.69, 0.65], seat: [0.3, 0.3, 0.34], seat2: [0.38, 0.38, 0.42], floor: [0.17, 0.17, 0.19], chrome: [0.8, 0.82, 0.86], red: [0.85, 0.1, 0.08], grey: [0.5, 0.51, 0.55],
+};
+const WCEN = [0.56, -0.235, 0.0]; const WTILT = (24 * Math.PI) / 180; const WR = 0.185;
+const WU = [0, 0, 1], WV = [Math.sin(WTILT), Math.cos(WTILT), 0], WN = [-Math.cos(WTILT), Math.sin(WTILT), 0];
+const ST_L = { pivot: [0.66, -0.29, -0.05], len: 0.23 }, ST_R = { pivot: [0.66, -0.29, 0.05], len: 0.23 };
+const WS0 = [1.1, -0.255], WS1 = [0.5, 0.25]; // 앞유리 아래 끝 / 위 끝 (x, y)
+
+class Interior {
+  constructor(g3) {
+    this.g3 = g3; this.cv = document.createElement('canvas'); this.cv.width = DYN.W; this.cv.height = DYN.H; this.c = this.cv.getContext('2d');
+    this.stat = null; this.dyn = new Builder(); this.dynMesh = null; this.key = ''; this.sig = ''; this.anch = null; this.mirrors = [];
+    this.wheelSrc = null; this.doorSrc = null; this.doorOpen = 0;
+  }
+
+  // 차량/색/눈높이별로 실내 정적 메쉬를 만든다
+  build(car, rgb, eyeH) {
+    const key = [car.id, rgb.join(','), eyeH].join('|'); if (key === this.key) return; this.key = key;
+    const g3 = this.g3; const b = new Builder(); const W = car.width, L = car.length, body = car.body;
+    const HW = Math.max(0.62, W / 2 - 0.1), LW = CZ - HW, RW = CZ + HW; const FY = -(eyeH - 0.16); const BL = -0.22, ROOF = 0.265;
+    const truck = body === 'truck'; const xRG = truck ? -0.62 : -clamp(L * 0.29 + 0.1, 1.15, 1.7); const hoodEnd = L / 2 - 0.35, trunkEnd = -(L / 2 + 0.3);
+    this.P = { HW, LW, RW, FY, BL, ROOF, xRG, hoodEnd, truck, body };
+    const wsAt = (t) => [WS0[0] + (WS1[0] - WS0[0]) * t, WS0[1] + (WS1[1] - WS0[1]) * t]; // 앞유리 선 위의 점
+    const D = (x, y, z) => [x, y, z];
+    const ob = (c, hx, hy, hz, col, o) => b.obox(c, [hx, 0, 0], [0, hy, 0], [0, 0, hz], col, o);
+    b.mat = MAT.INT;
+    // ---------------- 바닥 / 천장 / 뒷벽
+    b.mat = MAT.PLAIN;
+    b.quad(D(0.7, FY, LW), D(0.7, FY, RW), D(xRG - 0.1, FY, RW), D(xRG - 0.1, FY, LW), [0, 1, 0], C.floor);
+    b.quad(D(WS1[0] - 0.02, ROOF, LW), D(WS1[0] - 0.02, ROOF, RW), D(xRG, ROOF, RW), D(xRG, ROOF, LW), [0, -1, 0], C.head);
+    // 천장 앞쪽 어두운 띠 / 오버헤드 콘솔 / 선바이저
+    ob(D(0.6, ROOF - 0.012, CZ), 0.1, 0.012, 0.17, C.headD); ob(D(0.56, ROOF - 0.026, CZ - 0.07), 0.02, 0.012, 0.03, [0.82, 0.82, 0.8]); ob(D(0.56, ROOF - 0.026, CZ + 0.07), 0.02, 0.012, 0.03, [0.82, 0.82, 0.8]);
+    ob(D(0.6, ROOF - 0.012, -0.03), 0.13, 0.012, 0.23, C.headD); ob(D(0.6, ROOF - 0.012, CZ + 0.77), 0.13, 0.012, 0.23, C.headD);
+    // ---------------- 대시보드
+    b.mat = MAT.INT;
+    ob(D(0.88, (FY - 0.27) / 2, CZ), 0.22, (-0.27 - FY) / 2, HW, C.dash, { cTop: C.dashTop });
+    ob(D(1.05, -0.2685, CZ), 0.045, 0.002, HW - 0.05, C.black); // 앞유리 아래 디프로스터 그릴
+    // 계기판 후드(바이너클)
+    ob(D(0.87, -0.1925, 0), 0.09, 0.0775, 0.235, C.dash, { cTop: C.dashTop, cBack: C.black });
+    ob(D(0.835, -0.117, 0), 0.125, 0.012, 0.245, C.dash, { cTop: C.dashTop });
+    this._quadDyn(b, [0.774, -0.178, 0], [0, 0, 1], [0, 1, 0], 0.195, 0.07, DYN.cluster, 2, false);
+    // 센터 스택 (스크린 포드): 운전자 쪽으로 12° 틸트
+    const t = (12 * Math.PI) / 180; const podC = [1.0, -0.215, 0.64]; const pdx = [Math.cos(t), 0, Math.sin(t)], pdz = [-Math.sin(t), 0, Math.cos(t)];
+    b.obox(podC, mul(pdx, 0.035), [0, 0.065, 0], mul(pdz, 0.22), C.black, { cTop: C.dashTop });
+    const faceC = sub(podC, mul(pdx, 0.0355)); // 포드 앞면(운전자 쪽) 중심
+    const faceP = (zo, yo, d = 0) => add(add(faceC, mul(pdz, zo)), [0, yo, 0]).map((v, i) => v - pdx[i] * d);
+    // 센터 스크린
+    this._quadDyn(b, faceP(0.02, 0.01, 0.001), pdz, [0, 1, 0], 0.095, 0.05, DYN.screen, 2, false);
+    // 스크린 양옆 송풍구 + 하단 버튼열
+    const vent = (zo, yo, hw, hh) => { b.obox(faceP(zo, yo, 0.0), mul(pdx, 0.004), [0, hh, 0], mul(pdz, hw), [0.02, 0.02, 0.025]); for (let i = -2; i <= 2; i++) b.obox(faceP(zo, yo + i * hh * 0.36, 0.007), mul(pdx, 0.0015), [0, 0.0022, 0], mul(pdz, hw * 0.9), [0.3, 0.31, 0.34]); };
+    vent(-0.14, 0.01, 0.045, 0.03); vent(0.185, 0.01, 0.03, 0.03);
+    b.obox(faceP(0.02, -0.05, 0.0005), mul(pdx, 0.002), [0, 0.012, 0], mul(pdz, 0.19), [0.1, 0.1, 0.11]);
+    for (let i = -5; i <= 5; i++) if (Math.abs(i) > 0) b.obox(faceP(0.02 + i * 0.032, -0.05, 0.004), mul(pdx, 0.0025), [0, 0.006, 0], mul(pdz, 0.01), [0.5, 0.51, 0.55]);
+    // 시동 버튼 / 라이트 다이얼 받침 (대시 윗면)
+    b.mat = MAT.PLAIN;
+    ob(D(0.79, -0.2685, 0.3), 0.034, 0.003, 0.034, [0.05, 0.05, 0.055]); ob(D(0.79, -0.2685, -0.31), 0.034, 0.003, 0.034, [0.05, 0.05, 0.055]);
+    // ---------------- 핸들 컬럼 커버
+    b.beam([0.47, -0.2, 0], [0.8, -0.38, 0], [0, 0, 1], 0.13, 0.1, [0.15, 0.15, 0.17]);
+    // ---------------- 앞유리 틀 (A필러 / 헤더 / 카울)
+    b.mat = MAT.INT;
+    for (const sd of [-1, 1]) {
+      const zb = sd < 0 ? LW + 0.015 : RW - 0.015, zt = sd < 0 ? LW + 0.06 : RW - 0.06;
+      b.beam([WS0[0] + 0.02, WS0[1] - 0.005, zb], [WS1[0] - 0.01, WS1[1] + 0.012, zt], [0, 0, 1], 0.06, 0.05, C.trim);
+    }
+    b.beam([WS1[0], WS1[1] + 0.02, LW], [WS1[0], WS1[1] + 0.02, RW], [0, 1, 0], 0.06, 0.05, C.trim);
+    b.mat = MAT.PLAIN;
+    ob(D(WS0[0] + 0.1, WS0[1] - 0.01, CZ), 0.1, 0.006, HW - 0.04, [0.02, 0.02, 0.022]); // 카울 패널(검정)
+    // ---------------- 후드 + 펜더 (차체 색)
+    b.mat = MAT.PAINT; { const x0 = WS0[0] + 0.2, y0 = -0.205, x1 = hoodEnd, y1 = -0.235; const hw = Math.min(HW - 0.02, W / 2 - 0.2); const nrmH = nrm([-(y1 - y0), x1 - x0, 0]);
+      b.quad(D(x0, y0, CZ - hw), D(x0, y0, CZ + hw), D(x1, y1, CZ + hw), D(x1, y1, CZ - hw), nrmH, rgb);
+      for (const sd of [-1, 1]) { const zi = CZ + sd * hw, zo = CZ + sd * (W / 2 - 0.02); b.quad(D(x0, y0, zi), D(x0, y0 - 0.06, zo), D(x1, y1 - 0.06, zo), D(x1, y1, zi), nrm([-0.1 * sd * 0.0, 1, sd * 0.6]), rgb.map((v) => v * 0.92)); } }
+    // 와이퍼 구멍/카울 그릴 (후드 뒤쪽 검정 띠)
+    b.mat = MAT.PLAIN; b.quad(D(WS0[0] + 0.0, WS0[1] - 0.008, CZ - HW + 0.04), D(WS0[0] + 0.0, WS0[1] - 0.008, CZ + HW - 0.04), D(WS0[0] + 0.2, WS0[1] - 0.012, CZ + HW - 0.04), D(WS0[0] + 0.2, WS0[1] - 0.012, CZ - HW + 0.04), [0, 1, 0], [0.03, 0.03, 0.035]);
+    // ---------------- 오른쪽 도어 트림(조수석) · 뒷문 트림 · B/C필러 · 루프 레일
+    b.mat = MAT.INT;
+    const doorSide = (sd, x0, x1, dyn) => { const z = sd < 0 ? LW : RW; const B2 = dyn || b; const zc = z + sd * 0.035;
+      B2.obox(D((x0 + x1) / 2, (FY + BL) / 2, zc), [(x1 - x0) / 2, 0, 0], [0, (BL - FY) / 2, 0], [0, 0, 0.035], C.door, { cTop: C.door2 });
+      B2.obox(D((x0 + x1) / 2, BL + 0.012, zc), [(x1 - x0) / 2, 0, 0], [0, 0.012, 0], [0, 0, 0.04], [0.09, 0.09, 0.1]);
+      B2.obox(D((x0 + x1) / 2 + 0.03, -0.37, z - sd * 0.04), [(x1 - x0) / 2 - 0.12, 0, 0], [0, 0.03, 0], [0, 0, 0.055], C.door2); };
+    doorSide(1, -0.46, 0.6); doorSide(-1, xRG + 0.3, -0.46); doorSide(1, xRG + 0.3, -0.46);
+    for (const sd of [-1, 1]) {
+      const z = sd < 0 ? LW + 0.02 : RW - 0.02;
+      ob(D(-0.46, (BL + ROOF) / 2, z), 0.045, (ROOF - BL) / 2, 0.04, C.trim); // B필러
+      b.beam([xRG + 0.3, BL, z], [xRG + 0.03, ROOF - 0.01, z - sd * 0.1], [0, 0, 1], 0.07, 0.05, C.trim); // C필러
+      b.beam([WS1[0], ROOF - 0.03, z], [xRG, ROOF - 0.03, z], [0, 1, 0], 0.05, 0.05, C.trim); // 루프 레일
+    }
+    b.beam([xRG, ROOF - 0.02, LW], [xRG, ROOF - 0.02, RW], [0, 1, 0], 0.06, 0.05, C.trim); // 뒷유리 위
+    // 뒷유리 아래 선반 + 트렁크 데크
+    b.mat = MAT.PLAIN; const shY = -0.13; const xShf = xRG + 0.34;
+    if (!truck) { b.quad(D(-1.3, shY, LW), D(-1.3, shY, RW), D(xShf - 0.34 - 0.12, shY - 0.02, RW), D(xShf - 0.34 - 0.12, shY - 0.02, LW), [0, 1, 0], [0.1, 0.1, 0.11]); }
+    ob(D(truck ? xRG - 0.02 : -1.3, (FY + shY) / 2, CZ), 0.02, (shY - FY) / 2, HW, C.dash);
+    if (body === 'sedan' || body === 'coupe') { b.mat = MAT.PAINT; b.quad(D(xRG - 0.16, shY - 0.03, CZ - HW + 0.05), D(xRG - 0.16, shY - 0.03, CZ + HW - 0.05), D(trunkEnd, shY - 0.16, CZ + HW - 0.05), D(trunkEnd, shY - 0.16, CZ - HW + 0.05), [0, 1, 0], rgb); }
+    // ---------------- 좌석
+    b.mat = MAT.INT; const seat = (z, headrest = true) => {
+      b.obox(D(-0.12, -0.74, z), [0.33, 0, 0], [0, 0.04, 0], [0, 0, 0.23], C.seat, { cTop: C.seat2 });
+      for (const sd of [-1, 1]) b.obox(D(-0.12, -0.69, z + sd * 0.21), [0.31, 0, 0], [0, 0.04, 0], [0, 0, 0.03], C.seat2);
+      b.beam(D(-0.4, -0.7, z), D(-0.48, -0.1, z), [0, 0, 1], 0.46, 0.12, C.seat, { cFront: C.seat2 }); for (const sd of [-1, 1]) b.beam(D(-0.37, -0.66, z + sd * 0.2), D(-0.45, -0.2, z + sd * 0.2), [0, 0, 1], 0.07, 0.15, C.seat2);
+      if (headrest) { b.obox(D(-0.36, 0.0, z), [0.05, 0, 0], [0, 0.09, 0], [0, 0, 0.1], C.seat2); b.obox(D(-0.36, -0.1, z), [0.012, 0, 0], [0, 0.05, 0], [0, 0, 0.012], [0.05, 0.05, 0.05]); }
+    };
+    seat(0); seat(CZ + 0.38);
+    if (!truck) { // 뒷좌석
+      b.obox(D(-0.9, -0.74, CZ), [0.28, 0, 0], [0, 0.04, 0], [0, 0, HW - 0.08], C.seat, { cTop: C.seat2 });
+      b.beam(D(-1.2, -0.7, CZ), D(-1.28, -0.14, CZ), [0, 0, 1], (HW - 0.08) * 2, 0.12, C.seat, { cFront: C.seat2 });
+      for (const zo of [-0.42, 0, 0.42]) { b.obox(D(-1.26, -0.04, CZ + zo), [0.04, 0, 0], [0, 0.08, 0], [0, 0, 0.09], C.seat2); }
+    }
+    // ---------------- 센터 콘솔
+    b.mat = MAT.INT;
+    b.obox(D(0.26, (FY - 0.52) / 2, CZ), [0.46, 0, 0], [0, (-0.52 - FY) / 2, 0], [0, 0, 0.115], C.dash, { cTop: C.dashTop });
+    b.obox(D(-0.02, -0.47, CZ), [0.19, 0, 0], [0, 0.05, 0], [0, 0, 0.1], C.dash, { cTop: C.dashTop }); // 암레스트
+    b.mat = MAT.PLAIN; ob(D(0.18, -0.5185, CZ - 0.042), 0.04, 0.002, 0.034, [0.02, 0.02, 0.022]); ob(D(0.18, -0.5185, CZ + 0.042), 0.04, 0.002, 0.034, [0.02, 0.02, 0.022]); // 컵홀더
+    ob(D(0.5, -0.5185, CZ), 0.17, 0.002, 0.075, [0.03, 0.03, 0.035]); ob(D(0.5, -0.5175, CZ), 0.165, 0.001, 0.0035, [0.35, 0.36, 0.4]); // 기어 게이트 판
+    // ---------------- 룸미러 (유리는 거울 텍스처)
+    b.mat = MAT.PLAIN; { const rc = [0.52, 0.105, CZ]; const toEye = nrm([-rc[0], 0, -rc[2]]); const f = mul(toEye, -1); const rgt = [-f[2], 0, f[0]];
+      b.obox(add(rc, mul(f, 0.014)), mul(f, 0.014), [0, 0.05, 0], mul(rgt, 0.13), C.black); b.beam([0.5, ROOF, CZ], [rc[0] + 0.01, rc[1] + 0.05, CZ], [0, 0, 1], 0.02, 0.02, C.black);
+      this._quadMir(b, sub(rc, mul(f, 0.005)), rgt, [0, 1, 0], 0.115, 0.036, MIR.rear, 'rear'); }
+    // ---------------- 오른쪽 사이드미러 (문 밖)
+    { const rc = [0.82, -0.075, RW + 0.17]; const toEye = nrm([-rc[0], 0, -rc[2]]); const f = mul(toEye, -1); const rgt = [-f[2], 0, f[0]];
+      b.obox(add(rc, mul(f, 0.03)), mul(f, 0.03), [0, 0.085, 0], mul(rgt, 0.135), C.black); b.beam([0.62, BL + 0.01, RW], add(rc, mul(f, 0.03)), [0, 1, 0], 0.03, 0.02, C.black);
+      this._quadMir(b, sub(rc, mul(f, 0.006)), rgt, [0, 1, 0], 0.11, 0.07, MIR.right, 'right'); }
+    this.stat = this._upload(this.stat, b); this.statSrc = b.a;
+
+    // ---------------- 왼쪽 앞문 (열리면 회전하는 별도 파트)
+    const d = new Builder(); d.mat = MAT.INT; this.doorHinge = [0.58, 0, LW]; const door = d;
+    doorSide(-1, -0.46, 0.6, door);
+    door.mat = MAT.PLAIN;
+    door.obox(D(0.4, -0.2, LW + 0.012), [0.05, 0, 0], [0, 0.006, 0], [0, 0, 0.008], C.chrome); door.obox(D(0.45, -0.2, LW + 0.012), [0.008, 0, 0], [0, 0.018, 0], [0, 0, 0.008], C.chrome);
+    door.obox(D(0.22, -0.352, LW + 0.06), [0.08, 0, 0], [0, 0.008, 0], [0, 0, 0.03], [0.04, 0.04, 0.045]); for (let i = 0; i < 4; i++) door.obox(D(0.17 + i * 0.03, -0.342, LW + 0.06), [0.008, 0, 0], [0, 0.003, 0], [0, 0, 0.012], [0.45, 0.46, 0.5]);
+    door.obox(D(0.38, -0.66, LW + 0.008), [0.09, 0, 0], [0, 0.09, 0], [0, 0, 0.008], [0.02, 0.02, 0.022]); for (let i = -3; i <= 3; i++) door.obox(D(0.38, -0.66 + i * 0.022, LW + 0.018), [0.085, 0, 0], [0, 0.002, 0], [0, 0, 0.003], [0.18, 0.18, 0.2]);
+    { const rc = [0.8, -0.075, LW - 0.17]; const toEye = nrm([-rc[0], 0, -rc[2]]); const f = mul(toEye, -1); const rgt = [-f[2], 0, f[0]];
+      door.obox(add(rc, mul(f, 0.03)), mul(f, 0.03), [0, 0.085, 0], mul(rgt, 0.135), C.black); door.beam([0.62, BL + 0.01, LW], add(rc, mul(f, 0.03)), [0, 1, 0], 0.03, 0.02, C.black);
+      this._quadMir(door, sub(rc, mul(f, 0.006)), rgt, [0, 1, 0], 0.11, 0.07, MIR.left, 'left'); }
+    this.doorSrc = door.a.slice(); this.doorOpenAng = -1; this.doorN = 0;
+    // 핸들 로컬 메쉬
+    const w = new Builder(); w.mat = MAT.INT; w.torus(WR, 0.0175, 36, 8, [0.17, 0.17, 0.19]); w.mat = MAT.PLAIN;
+    w.obox([-0.1, 0, 0.0], [0.09, 0, 0], [0, 0.023, 0], [0, 0, 0.011], [0.2, 0.2, 0.22]); w.obox([0.1, 0, 0.0], [0.09, 0, 0], [0, 0.023, 0], [0, 0, 0.011], [0.2, 0.2, 0.22]); w.obox([0, -0.1, 0.0], [0.024, 0, 0], [0, 0.09, 0], [0, 0, 0.011], [0.2, 0.2, 0.22]);
+    w.obox([0, 0, 0.014], [0.058, 0, 0], [0, 0.044, 0], [0, 0, 0.02], [0.2, 0.2, 0.22], { cTop: [0.26, 0.26, 0.28] }); w.obox([0, 0.0, 0.036], [0.022, 0, 0], [0, 0.022, 0], [0, 0, 0.002], C.chrome);
+    for (const sx of [-1, 1]) w.obox([sx * 0.105, 0, 0.0125 + 0.003], [0.012, 0, 0], [0, 0.008, 0], [0, 0, 0.002], [0.45, 0.46, 0.5]);
+    w.obox([0, WR, 0.0], [0.004, 0, 0], [0, 0.02, 0], [0, 0, 0.02], [0.82, 0.84, 0.88]); // 12시 표시
+    this.wheelSrc = w.a.slice();
+    // 앵커 (터치 영역/투영용)
+    this.anch = {
+      wheel: { c: WCEN, R: WR, u: WU, v: WV, n: WN }, stL: { pivot: ST_L.pivot, len: ST_L.len, sd: -1 }, stR: { pivot: ST_R.pivot, len: ST_R.len, sd: 1 },
+      start: { p: [0.79, -0.262, 0.3], r: 0.03 }, dial: { p: [0.79, -0.262, -0.31], r: 0.03 }, hazard: { p: faceP(0.02, -0.05, 0.006), r: 0.026 }, doorPad: [0.4, -0.21, LW + 0.03],
+    };
+    this.dyn.clear(); this.dynMesh = g3.mesh(new Float32Array(STRIDE * 6), true); this.dynMesh.count = 0; this.sig = '';
+    this._rects = null;
+  }
+
+  _upload(old, b) { const f = b.float32(); if (old) { this.g3.update(old, f); return old; } return this.g3.mesh(f, false); }
+
+  // 동적 텍스처(캔버스) 영역을 쿼드로
+  _quadDyn(b, c, u, v, hw, hh, rect, off, flipV) {
+    const P = (su, sv) => [c[0] + u[0] * hw * su + v[0] * hh * sv, c[1] + u[1] * hw * su + v[1] * hh * sv, c[2] + u[2] * hw * su + v[2] * hh * sv];
+    const u0 = off + rect.x / DYN.W, u1 = off + (rect.x + rect.w) / DYN.W, vt = rect.y / DYN.H, vb = (rect.y + rect.h) / DYN.H; const m = b.mat; b.mat = MAT.PLAIN;
+    b.quad(P(-1, 1), P(1, 1), P(1, -1), P(-1, -1), [0, 0, 0], [1, 1, 1], [[u0, vt], [u1, vt], [u1, vb], [u0, vb]]); b.mat = m;
+  }
+  _quadMir(b, c, u, v, hw, hh, rect, id) {
+    const P = (su, sv) => [c[0] + u[0] * hw * su + v[0] * hh * sv, c[1] + u[1] * hw * su + v[1] * hh * sv, c[2] + u[2] * hw * su + v[2] * hh * sv];
+    const u0 = 4 + rect.x / MIR.W, u1 = 4 + (rect.x + rect.w) / MIR.W, vb = rect.y / MIR.H, vt = (rect.y + rect.h) / MIR.H; const m = b.mat; b.mat = MAT.PLAIN;
+    b.quad(P(-1, 1), P(1, 1), P(1, -1), P(-1, -1), [0, 0, 0], [1, 1, 1], [[u0, vt], [u1, vt], [u1, vb], [u0, vb]]); b.mat = m;
+    this.mirrors = this.mirrors.filter((q) => q.id !== id); this.mirrors.push({ id, corners: [P(-1, 1), P(1, 1), P(1, -1), P(-1, -1)] });
+  }
+
+  // ---------------------------------------------------------------- 계기판/스크린 캔버스
+  drawDyn(veh, time) {
+    const on = veh.engineOn; const d = new Date(); const blink = Math.floor(time * 2.6) % 2 === 0;
+    const sig = [on ? 1 : 0, Math.round(veh.kmh), Math.round(veh.rpm / 40), String(veh.gear), veh.left ? 1 : 0, veh.right ? 1 : 0, veh.hazard ? 1 : 0, blink ? 1 : 0, veh.belt ? 1 : 0, veh.doorClosed ? 1 : 0, veh.handbrake ? 1 : 0, veh.headlight | 0, veh.wiper | 0, d.getMinutes()].join('|');
+    if (sig === this.sig) return false; this.sig = sig;
+    const c = this.c; c.clearRect(0, 0, DYN.W, DYN.H); c.save(); this._cluster(c, veh, blink); c.restore(); c.save(); this._screen(c, veh, d); c.restore();
+    this.g3.updateDyn(this.cv); return true;
+  }
+  _cluster(c, veh, blink) {
+    const R0 = DYN.cluster; const u = R0.w / 56.6; const k = { cx: R0.w / 2, cy: R0.h / 2, R: 8 * u, off: 17.5 * u }; const on = veh.engineOn;
+    c.fillStyle = '#020306'; c.fillRect(0, 0, R0.w, R0.h);
+    const gauge = (x, val, max, labels, unit, redFrom) => {
+      const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25, R = k.R;
+      const gd = c.createRadialGradient(x, k.cy, R * 0.2, x, k.cy, R * 1.05); gd.addColorStop(0, '#0b0f15'); gd.addColorStop(1, '#161c26'); c.fillStyle = gd; c.beginPath(); c.arc(x, k.cy, R * 1.12, 0, TAU); c.fill();
+      c.strokeStyle = '#323a47'; c.lineWidth = 0.35 * u; c.stroke();
+      c.globalAlpha = on ? 1 : 0.3;
+      if (redFrom != null) { c.strokeStyle = '#d63a2f'; c.lineWidth = 0.9 * u; c.beginPath(); c.arc(x, k.cy, R * 0.93, a0 + (a1 - a0) * redFrom, a1); c.stroke(); }
+      const n = labels.length - 1; const sub2 = labels.length > 7 ? 5 : 4;
+      for (let i = 0; i <= n * sub2; i++) { const a = a0 + (a1 - a0) * i / (n * sub2), maj = i % sub2 === 0; const r0 = R * (maj ? 0.8 : 0.86), r1 = R * 0.95; c.strokeStyle = redFrom != null && i / (n * sub2) >= redFrom ? '#ff6a5a' : '#cfd8e6'; c.lineWidth = (maj ? 0.34 : 0.18) * u; c.beginPath(); c.moveTo(x + Math.cos(a) * r0, k.cy + Math.sin(a) * r0); c.lineTo(x + Math.cos(a) * r1, k.cy + Math.sin(a) * r1); c.stroke(); }
+      c.fillStyle = '#e6edf7'; c.font = `600 ${1.55 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      labels.forEach((t, i) => { const a = a0 + (a1 - a0) * i / n; c.fillText(String(t), x + Math.cos(a) * R * 0.62, k.cy + Math.sin(a) * R * 0.62); });
+      c.fillStyle = '#7f8ca0'; c.font = `${1.3 * u}px sans-serif`; c.fillText(unit, x, k.cy + R * 0.34); c.globalAlpha = 1;
+      const v = on ? clamp(val / max, 0, 1) : 0; const a = a0 + (a1 - a0) * v;
+      c.save(); c.translate(x, k.cy); c.rotate(a); c.fillStyle = '#ff5a26'; c.beginPath(); c.moveTo(-R * 0.14, -0.28 * u); c.lineTo(R * 0.93, -0.1 * u); c.lineTo(R * 0.93, 0.1 * u); c.lineTo(-R * 0.14, 0.28 * u); c.closePath(); c.fill(); c.restore();
+      c.fillStyle = '#1b2029'; c.beginPath(); c.arc(x, k.cy, R * 0.12, 0, TAU); c.fill(); c.strokeStyle = '#475163'; c.lineWidth = 0.25 * u; c.stroke();
+    };
+    gauge(k.cx - k.off, veh.kmh, 200, [0, 40, 80, 120, 160, 200], 'km/h', null);
+    gauge(k.cx + k.off, veh.rpm, 8000, [0, 1, 2, 3, 4, 5, 6, 7, 8], '×1000 rpm', 0.78);
+    const gl = String(veh.gearLabel());
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.globalAlpha = on ? 1 : 0.3;
+    c.fillStyle = veh.gear === 'R' ? '#ff7a7a' : '#8dffb2'; c.font = `800 ${5 * u}px sans-serif`; c.fillText(gl, k.cx, k.cy - 0.4 * u);
+    c.fillStyle = '#cdd6e4'; c.font = `700 ${2.3 * u}px sans-serif`; c.fillText(Math.round(veh.kmh) + ' km/h', k.cx, k.cy + 3.9 * u);
+    c.fillStyle = '#6f7b8e'; c.font = `${1.3 * u}px sans-serif`; c.fillText(on ? 'READY' : 'OFF', k.cx, k.cy + 6.1 * u); c.globalAlpha = 1;
+    const arrow = (x, dir, lit) => { c.fillStyle = lit ? '#37ff74' : '#1c2a22'; c.beginPath(); c.moveTo(x + dir * 1.9 * u, k.cy - 5.3 * u); c.lineTo(x - dir * 0.2 * u, k.cy - 7.1 * u); c.lineTo(x - dir * 0.2 * u, k.cy - 6 * u); c.lineTo(x - dir * 2 * u, k.cy - 6 * u); c.lineTo(x - dir * 2 * u, k.cy - 4.6 * u); c.lineTo(x - dir * 0.2 * u, k.cy - 4.6 * u); c.lineTo(x - dir * 0.2 * u, k.cy - 3.5 * u); c.closePath(); c.fill(); };
+    arrow(k.cx - 3.2 * u, -1, (veh.left || veh.hazard) && blink); arrow(k.cx + 3.2 * u, 1, (veh.right || veh.hazard) && blink);
+    const y = k.cy + k.R * 1.0; const icons = [
+      [!veh.belt, '#ff3b30', (x) => { c.beginPath(); c.arc(x, y - 0.9 * u, 0.55 * u, 0, TAU); c.fill(); c.lineWidth = 0.35 * u; c.beginPath(); c.moveTo(x - 0.9 * u, y); c.lineTo(x + 0.2 * u, y + 1.5 * u); c.moveTo(x - 0.1 * u, y - 0.2 * u); c.lineTo(x - 0.1 * u, y + 1.5 * u); c.stroke(); }],
+      [!veh.doorClosed, '#ff3b30', (x) => { c.lineWidth = 0.3 * u; c.strokeRect(x - 1.1 * u, y - 1.2 * u, 2.2 * u, 2.3 * u); c.fillRect(x - 1.1 * u, y - 1.2 * u, 0.7 * u, 2.3 * u); }],
+      [veh.handbrake, '#ff3b30', (x) => { c.lineWidth = 0.3 * u; c.beginPath(); c.arc(x, y, 1.15 * u, 0, TAU); c.stroke(); c.font = `bold ${1.5 * u}px sans-serif`; c.fillText('P', x, y + 0.1 * u); }],
+      [on, '#35e07b', (x) => { c.font = `bold ${1.2 * u}px sans-serif`; c.fillText('RDY', x, y); }],
+      [veh.headlight > 0, veh.headlight === 2 ? '#3d8bff' : '#35e07b', (x) => { c.lineWidth = 0.3 * u; c.beginPath(); c.arc(x, y, 1.1 * u, -Math.PI / 2, Math.PI / 2); c.lineTo(x - 0.5 * u, y + 1.1 * u); c.lineTo(x - 0.5 * u, y - 1.1 * u); c.closePath(); c.stroke(); for (let i = -1; i <= 1; i++) { c.beginPath(); c.moveTo(x - 0.9 * u, y + i * 0.6 * u); c.lineTo(x - 1.7 * u, y + i * 0.6 * u); c.stroke(); } }],
+      [veh.wiper > 0, '#35e07b', (x) => { c.font = `bold ${1.2 * u}px sans-serif`; c.fillText('W' + veh.wiper, x, y); }],
+    ];
+    icons.forEach(([lit, col, fn], i) => { const x = k.cx + (i - 2.5) * 4.4 * u; c.save(); c.globalAlpha = lit ? 1 : 0.18; c.fillStyle = lit ? col : '#8a93a3'; c.strokeStyle = lit ? col : '#8a93a3'; c.textAlign = 'center'; c.textBaseline = 'middle'; fn(x); c.restore(); });
+  }
+  _screen(c, veh, d) {
+    const s = DYN.screen; const u = s.h / 8.6; const on = veh.engineOn; c.translate(s.x, s.y);
+    if (on) {
+      const g = c.createLinearGradient(0, 0, 0, s.h); g.addColorStop(0, '#142033'); g.addColorStop(1, '#0a1220'); c.fillStyle = g; c.fillRect(0, 0, s.w, s.h);
+      const hh = String(d.getHours()).padStart(2, '0'), mm = String(d.getMinutes()).padStart(2, '0');
+      c.fillStyle = '#e9f1ff'; c.font = `700 ${3.3 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`${hh}:${mm}`, s.w / 2, 3.2 * u);
+      c.fillStyle = '#7e93b3'; c.font = `${1.5 * u}px sans-serif`; c.fillText(veh.headlight ? '전조등 ON' : '21°C · AUTO', s.w / 2, 6.4 * u);
+    } else { c.fillStyle = '#05070a'; c.fillRect(0, 0, s.w, s.h); const g = c.createLinearGradient(0, 0, s.w, s.h); g.addColorStop(0, 'rgba(255,255,255,.06)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, s.w, s.h); }
+  }
+
+  // ---------------------------------------------------------------- 프레임 그리기
+  // ck: Cockpit (wheel, stalkL/R, knob, pbT, L). 반환: 동적 앵커(문 손잡이/미러 모서리 포함)
+  draw(ivp, cam, sunCar, veh, time, ck) {
+    const g3 = this.g3; const P = this.P; if (!this.stat) return;
+    this.drawDyn(veh, time);
+    const D = this.dyn; D.clear();
+    // 핸들
+    { const a = ck.wheel || 0, cs = Math.cos(a), sn = Math.sin(a); const u = WU, v = WV, n = WN;
+      const M = [u[0] * cs - v[0] * sn, u[0] * sn + v[0] * cs, n[0], u[1] * cs - v[1] * sn, u[1] * sn + v[1] * cs, n[1], u[2] * cs - v[2] * sn, u[2] * sn + v[2] * cs, n[2]];
+      D.addXf(this.wheelSrc, M, WCEN); }
+    // 레버(방향지시등 / 와이퍼)
+    D.mat = MAT.PLAIN;
+    const stalk = (S, tilt, sd) => { const piv = S.pivot; const tip = [piv[0] - 0.035 * (1 - Math.abs(tilt)), piv[1] + tilt * 0.045, piv[2] + sd * S.len]; D.beam(piv, tip, [0, 1, 0], 0.03, 0.026, [0.2, 0.2, 0.22]); const e = [tip[0] - 0.004, tip[1], tip[2] + sd * 0.02]; D.beam(tip, e, [0, 1, 0], 0.03, 0.026, [0.22, 0.22, 0.24]); D.beam([tip[0] - 0.004, tip[1], tip[2] + sd * 0.004], [tip[0] - 0.004, tip[1], tip[2] + sd * 0.008], [0, 1, 0], 0.033, 0.029, C.chrome); return tip; };
+    const tipL = stalk(ST_L, clamp(ck.stalkL || 0, -1, 1), -1), tipR = stalk(ST_R, clamp(ck.stalkR || 0, -1, 1), 1);
+    // 시동 버튼 / 라이트 다이얼 / 비상등
+    const A = this.anch; const on = veh.engineOn; const blink = Math.floor(time * 2.6) % 2 === 0;
+    { const p = A.start.p; D.obox([p[0], p[1] + 0.006, p[2]], [0.024, 0, 0], [0, 0.007, 0], [0, 0, 0.024], on ? [0.5, 0.06, 0.05] : [0.12, 0.12, 0.13], { cTop: on ? [0.95, 0.2, 0.15] : [0.16, 0.16, 0.18] }); D.obox([p[0], p[1] + 0.0135, p[2]], [0.008, 0, 0], [0, 0.0008, 0], [0, 0, 0.008], on ? [1, 0.75, 0.7] : [0.5, 0.5, 0.55], { emissive: on }); }
+    { const p = A.dial.p; const ang = [-0.9, 0, 0.9][veh.headlight | 0]; const cs = Math.cos(ang), sn = Math.sin(ang); const ax = [cs * 0.026, 0, sn * 0.026], az = [-sn * 0.026, 0, cs * 0.026];
+      D.obox([p[0], p[1] + 0.009, p[2]], ax, [0, 0.009, 0], az, [0.13, 0.13, 0.15], { cTop: [0.2, 0.2, 0.22] }); D.obox([p[0] + az[0] * -0.7, p[1] + 0.0185, p[2] + az[2] * -0.7], [ax[0] * 0.08, 0, ax[2] * 0.08], [0, 0.001, 0], [az[0] * 0.38, 0, az[2] * 0.38], [0.95, 0.95, 0.98]); }
+    { const p = A.hazard.p; const hz = veh.hazard && blink; D.obox(p, [0.004, 0, 0], [0, 0.016, 0], [0, 0, 0.026], [0.08, 0.08, 0.09]); D.obox([p[0] - 0.005, p[1], p[2]], [0.0015, 0, 0], [0, 0.011, 0], [0, 0, 0.019], hz ? [1, 0.25, 0.2] : [0.6, 0.1, 0.08], { emissive: hz }); }
+    // 기어 레버 / 사이드브레이크 (센터 콘솔) — 2D 패드 노브 위치와 동기화
+    const L = ck.L; const kn = ck.knob || { x: 0, y: 0 };
+    { let kx, kz; const base = [0.5, -0.5, CZ];
+      if (ck.trans === 'AT' && L?.slots) { const y0 = L.slots[0].y, y3 = L.slots[3].y; const t = clamp((kn.y - y0) / ((y3 - y0) || 1), 0, 1); kx = 0.63 - 0.26 * t; kz = CZ; }
+      else if (L?.cols) { const f = clamp((kn.x - L.cols[0]) / ((L.cols[2] - L.cols[0]) || 1), 0, 1), f2 = clamp((kn.y - L.rows[0]) / ((L.rows[2] - L.rows[0]) || 1), 0, 1); kx = 0.61 - 0.22 * f2; kz = CZ - 0.07 + 0.14 * f; } else { kx = 0.5; kz = CZ; }
+      const top = [kx, -0.36, kz]; D.beam(base, top, [0, 0, 1], 0.02, 0.02, [0.55, 0.56, 0.6]); D.obox([kx, -0.335, kz], [0.026, 0, 0], [0, 0.03, 0], [0, 0, 0.022], [0.07, 0.07, 0.08], { cTop: [0.14, 0.14, 0.16] });
+      const pb = clamp(ck.pbT || 0, 0, 1); const ang = 0.08 + pb * 0.62; const pbase = [0.16, -0.5, CZ - 0.0]; const pend = [pbase[0] - Math.cos(ang) * 0.24, pbase[1] + Math.sin(ang) * 0.24, pbase[2]];
+      D.beam(pbase, pend, [0, 0, 1], 0.026, 0.02, [0.1, 0.1, 0.11]); D.obox(add(pend, [0, 0.0, 0]), [0.03, 0, 0], [0, 0.015, 0], [0, 0, 0.024], [0.07, 0.07, 0.08], { cTop: [0.15, 0.15, 0.17] }); if (veh.handbrake) D.obox(add(pend, [0.0, 0.017, 0]), [0.012, 0, 0], [0, 0.001, 0], [0, 0, 0.012], [1, 0.2, 0.15], { emissive: true }); }
+    // 와이퍼
+    { const lv = veh.wiper | 0; const sweep = lv ? (Math.sin(time * (lv === 1 ? 2.2 : lv === 2 ? 3.2 : 4.4)) * 0.5 + 0.5) : 0; const upw = nrm([WS1[0] - WS0[0], WS1[1] - WS0[1], 0]);
+      for (const [zp, len] of [[CZ - 0.32, 0.62], [CZ + 0.28, 0.5]]) { const piv = [WS0[0] + 0.07, WS0[1] + 0.006, zp]; const a = 0.06 + sweep * 1.2; const dir = add(mul([0, 0, 1], Math.cos(a)), mul(upw, Math.sin(a))); const end = add(piv, mul(dir, len)); D.beam(piv, end, [1, 0, 0], 0.012, 0.01, [0.03, 0.03, 0.035]); D.beam(add(piv, mul(dir, len * 0.2)), end, [1, 0, 0], 0.02, 0.006, [0.05, 0.05, 0.055]); } }
+    // 왼쪽 앞문 (열림 각도)
+    const open = veh.doorClosed ? 0 : 0.5; this.doorOpen += (open - this.doorOpen) * 0.25; const da = this.doorOpen; const cs = Math.cos(da), sn = Math.sin(da);
+    const Md = [cs, 0, -sn, 0, 1, 0, sn, 0, cs]; D.addXf(this.doorSrc, Md, this.doorHinge, this.doorHinge);
+    const xf = (p) => { const x = p[0] - this.doorHinge[0], z = p[2] - this.doorHinge[2]; return [this.doorHinge[0] + cs * x - sn * z, p[1], this.doorHinge[2] + sn * x + cs * z]; };
+    // 앵커 갱신
+    this.dynA = { tipL, tipR, door: xf(A.doorPad), mirrors: this.mirrors.map((m) => ({ id: m.id, corners: m.id === 'left' ? m.corners.map(xf) : m.corners })) };
+    // 메쉬 업로드 후 그리기
+    g3.update(this.dynMesh, D.float32());
+    g3.begin(ivp, cam, { sun: sunCar, sky: [0.62, 0.66, 0.74], gnd: [0.36, 0.34, 0.32], amb: 2.1, sunI: 1.5, sunK: 0.5, fog: 0, shadow: false });
+    g3.draw(this.stat); g3.draw(this.dynMesh);
+  }
+}
+
+return { CZ, DYN, MIR, Interior };
 })();
 
 // ===== js/ui/scene.js =====
@@ -3438,9 +3779,9 @@ return { makeAtlas, addCar, Scene };
 
 // ===== js/ui/cockpit.js =====
 __m["js/ui/cockpit.js"] = (() => {
-// 실내(조종석) 그리기 + 실물형 조작
-//  핸들: 테두리를 잡고 돌림 · 페달: 누르는 위치(아래쪽일수록 깊게) · 변속레버: 게이트를 따라 드래그(AT P-R-N-D / MT H패턴)
-//  방향지시등/와이퍼 레버: 위·아래로 튕김 · 사이드브레이크: 레버를 위로 · 안전띠: 어깨쪽 벨트를 버클로 끌어서 채움 · 문: 손잡이
+// 조종석 조작: 실내는 3D(interior.js)로 그리고, 여기서는 3D 요소가 화면에 투영된 위치(setProjected)를 터치 영역으로 쓴다.
+//  핸들: 테두리를 잡고 돌림 · 방향지시등/와이퍼 레버: 위·아래로 · 시동/비상등/라이트/문 손잡이: 탭
+//  발이 닿는 쪽(페달)·센터콘솔(변속 레버, 사이드브레이크)·안전띠는 화면 아래쪽 '조작 패드'로 만지고, 3D 콘솔의 레버도 같이 움직인다.
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
@@ -3465,25 +3806,20 @@ class Cockpit {
   layout() {
     const W = this.W, H = this.H; if (!W) return; const u = H / 100; const AT = this.trans === 'AT';
     const L = this.L = { u, W, H };
-    L.wheel = { cx: 0.5 * W, cy: 1.0 * H, R: 33 * u };
-    L.cl = { cx: 0.5 * W, cy: 0.835 * H, R: 8 * u, off: 17.5 * u };
+    const off = { x: -1e5, y: -1e5, r: 1 };
+    L.wheel = { cx: -1e5, cy: -1e5, R: 1, ry: 1 }; L.start = { ...off }; L.hazard = { ...off }; L.dial = { ...off }; L.door = { x: -1e5, y: -1e5, w: 1, h: 1 };
+    L.stL = { bx: -1e5, by: -1e5, tx: -1e5, ty: -1e5 }; L.stR = { bx: -1e5, by: -1e5, tx: -1e5, ty: -1e5 };
+    if (this.P3) Object.assign(L, this.P3);
     const py = 0.745 * H, ph = 25 * u, pw = 0.065 * W;
     L.pedal = { brake: { x: 0.865 * W, y: py, w: pw, h: ph }, gas: { x: 0.935 * W, y: py, w: pw, h: ph }, clutch: { x: 0.09 * W, y: py, w: pw, h: ph } };
     L.console = { x: 0.755 * W, y: 0.685 * H, w: 0.1 * W, h: 0.315 * H };
-    L.gate = AT ? { x: 0.805 * W - 2.4 * u, y: 0.70 * H, w: 4.8 * u, h: 27.5 * u } : { x: 0.762 * W, y: 0.70 * H, w: 0.086 * W, h: 27.5 * u };
+    L.gate = AT ? { x: 0.805 * W - 2.4 * u, y: 0.775 * H, w: 4.8 * u, h: 20.5 * u } : { x: 0.762 * W, y: 0.775 * H, w: 0.086 * W, h: 20.5 * u };
     if (AT) { L.slots = ['P', 'R', 'N', 'D'].map((g, i) => ({ g, x: 0.805 * W, y: L.gate.y + (i + 0.5) * L.gate.h / 4 })); }
     else {
       const cx = [0.7775, 0.8075, 0.8375].map((f) => f * W), ys = [L.gate.y + 0.13 * L.gate.h, L.gate.y + 0.5 * L.gate.h, L.gate.y + 0.87 * L.gate.h];
       L.cols = cx; L.rows = ys; L.slots = [{ g: 1, x: cx[0], y: ys[0] }, { g: 2, x: cx[0], y: ys[2] }, { g: 3, x: cx[1], y: ys[0] }, { g: 4, x: cx[1], y: ys[2] }, { g: 5, x: cx[2], y: ys[0] }, { g: 'R', x: cx[2], y: ys[2] }];
     }
-    L.pb = { x: 0.735 * W, y0: 0.84 * H, y1: 0.985 * H };
-    L.stL = { bx: 0.38 * W, by: 0.835 * H, tx: 0.30 * W, ty: 0.84 * H };
-    L.stR = { bx: 0.62 * W, by: 0.835 * H, tx: 0.70 * W, ty: 0.84 * H };
-    L.start = { x: 0.645 * W, y: 0.735 * H, r: 2.9 * u };
-    L.hazard = { x: 0.705 * W, y: 0.712 * H, r: 2.3 * u };
-    L.screen = { x: 0.665 * W, y: 0.735 * H, w: 0.08 * W, h: 8.6 * u };
-    L.dial = { x: 0.235 * W, y: 0.80 * H, r: 3.3 * u };
-    L.door = { x: 0.035 * W, y: 0.78 * H, w: 5.6 * u, h: 3.2 * u };
+    L.pb = { x: 0.735 * W, y0: 0.87 * H, y1: 0.985 * H };
     L.buckle = { x: 0.69 * W, y: 0.94 * H, r: 2.7 * u };
     L.tongue = { x: 0.085 * W, y: 0.44 * H, r: 2.4 * u };
     L.anchor = { x: 0.04 * W, y: -0.01 * H };
@@ -3504,14 +3840,14 @@ class Cockpit {
     if (this.trans === 'MT' && inR(L.pedal.clutch, u)) return 'clutch';
     if (inR({ x: L.gate.x - 2 * u, y: L.gate.y - 2 * u, w: L.gate.w + 4 * u, h: L.gate.h + 4 * u })) return 'shift';
     if (Math.abs(x - L.pb.x) < 5 * u && y > L.pb.y0 - 4 * u && y < L.pb.y1 + 2 * u) return 'pb';
-    if (near(L.start, L.start.r * 1.7)) return 'start'; if (near(L.hazard, L.hazard.r * 2)) return 'hazard';
-    if (near(L.dial, L.dial.r * 1.5)) return 'dial';
+    if (near(L.start, Math.max(L.start.r * 1.8, 4.5 * u))) return 'start'; if (near(L.hazard, Math.max(L.hazard.r * 1.8, 4 * u))) return 'hazard';
+    if (near(L.dial, Math.max(L.dial.r * 1.8, 4.5 * u))) return 'dial';
     if (near({ x: L.stL.tx, y: L.stL.ty }, 6 * u)) return 'stL'; if (near({ x: L.stR.tx, y: L.stR.ty }, 6 * u)) return 'stR';
     if (inR(L.door, 2.5 * u)) return 'door';
     if (near(L.tongue, 5.5 * u) && !(this.veh && this.veh.belt)) return 'tongue';
     if (near(L.buckle, 5 * u) && this.veh && this.veh.belt) return 'unbelt';
-    const w = L.wheel; const d = Math.hypot(x - w.cx, y - w.cy);
-    if (d >= w.R * 0.5 && d <= w.R * 1.22 && y > 0.6 * this.H) return 'wheel';
+    const w = L.wheel; const d = Math.hypot((x - w.cx) / w.R, (y - w.cy) / (w.ry || w.R));
+    if (d >= 0.3 && d <= 1.22) return 'wheel';
     return null;
   }
   down(id, x, y) {
@@ -3519,7 +3855,7 @@ class Cockpit {
     if (!k) { this.ptr.set(id, { k: 'look', sx: x, sy: y, moved: 0 }); this.api.lookStart(); return; }
     const p = { k, sx: x, sy: y, x, y, last: 0 }; this.ptr.set(id, p); const u = L.u;
     switch (k) {
-      case 'wheel': p.a = Math.atan2(y - L.wheel.cy, x - L.wheel.cx); this.wheelTouched = true; break;
+      case 'wheel': p.a = Math.atan2((y - L.wheel.cy) / (L.wheel.ry || L.wheel.R), (x - L.wheel.cx) / L.wheel.R); this.wheelTouched = true; break;
       case 'brake': case 'gas': case 'clutch': this._pedal(k, y); break;
       case 'shift': p.kx = this.knob.x; p.ky = this.knob.y; this._shiftMove(p, x, y, true); break;
       case 'pb': p.start = this.pbT; break;
@@ -3541,7 +3877,7 @@ class Cockpit {
     const p = this.ptr.get(id); if (!p) return; const L = this.L, u = L.u; const dx = x - (p.x ?? p.sx), dy = y - (p.y ?? p.sy);
     switch (p.k) {
       case 'look': p.moved = Math.max(p.moved, Math.hypot(x - p.sx, y - p.sy)); this.api.lookMove(x - p.sx, y - p.sy); break;
-      case 'wheel': { const a = Math.atan2(y - L.wheel.cy, x - L.wheel.cx); this.wheel = clamp(this.wheel + angDiff(a, p.a), -WHEEL_MAX, WHEEL_MAX); p.a = a; break; }
+      case 'wheel': { const a = Math.atan2((y - L.wheel.cy) / (L.wheel.ry || L.wheel.R), (x - L.wheel.cx) / L.wheel.R); this.wheel = clamp(this.wheel + angDiff(a, p.a), -WHEEL_MAX, WHEEL_MAX); p.a = a; break; }
       case 'brake': case 'gas': case 'clutch': this._pedal(p.k, y); break;
       case 'shift': this._shiftMove(p, x, y); break;
       case 'pb': { const t = clamp(1 - (y - L.pb.y0) / (L.pb.y1 - L.pb.y0), 0, 1); this.pbT = t; const want = t > 0.55; if (this.veh && this.veh.handbrake !== want) this.api.fire('handbrake'); break; }
@@ -3618,235 +3954,46 @@ class Cockpit {
     if (![...this.ptr.values()].some((q) => q.k === 'stR')) this.stalkR += (0 - this.stalkR) * Math.min(1, dt * 14);
     return clamp(this.wheel / WHEEL_MAX, -1, 1);
   }
+  // 3D 실내 요소의 화면 위치 (매 프레임 view 가 호출)
+  setProjected(o) { this.P3 = o; if (this.L) Object.assign(this.L, o); }
   clearTouches() { for (const id of [...this.ptr.keys()]) this.up(id, 0, 0); this.ptr.clear(); this.api.pedal('throttle', null); this.api.pedal('brake', null); this.api.pedal('clutch', null); this.beltDrag = null; }
 
-  // ------------------------------------------------------------ 그리기
-  draw(c, g, mid) {
-    const L = this.L; if (!L) return; const veh = g.veh; this.veh = veh; const { W, H, u } = L; const time = g.time || 0;
-    if (!this.statics) this._buildStatics();
-    this._wipers(c, veh, time);
-    c.drawImage(this.statics, 0, 0);
-    if (mid) mid(c);
-    this._cluster(c, veh, time, g);
-    this._screen(c, veh);
-    this._stalks(c);
-    this._wheel(c, veh);
-    this._console(c, veh);
-    this._buttons(c, veh, time);
+  // ------------------------------------------------------------ 그리기 (2D 는 조작 패드·페달·안전띠·안내만)
+  draw(c, g) {
+    const L = this.L; if (!L) return; const veh = g.veh; this.veh = veh; const time = g.time || 0;
+    this._pad(c, veh);
     this._pedals(c);
     this._belt(c, veh);
     if (this.hint > 0) this._hints(c);
   }
 
-  _wipers(c, veh, time) {
-    const { W, H, u } = this.L; const lv = veh.wiper | 0;
-    const sweep = lv ? (Math.sin(time * (lv === 1 ? 2.2 : lv === 2 ? 3.2 : 4.4)) * 0.5 + 0.5) : 0;
-    c.save(); c.lineCap = 'round';
-    const arm = (px, py, len, base) => { const a = base - sweep * 1.25; c.strokeStyle = '#0b0c0e'; c.lineWidth = 0.55 * u; c.beginPath(); c.moveTo(px, py); c.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len); c.stroke(); c.lineWidth = 0.9 * u; c.strokeStyle = '#15171a'; c.beginPath(); c.moveTo(px + Math.cos(a) * len * 0.2, py + Math.sin(a) * len * 0.2); c.lineTo(px + Math.cos(a) * len * 0.98, py + Math.sin(a) * len * 0.98); c.stroke(); };
-    arm(0.40 * W, 0.725 * H, 0.27 * W, -0.05); arm(0.60 * W, 0.725 * H, 0.27 * W, -0.05 - 0.0);
-    c.restore();
-  }
-
-  _buildStatics() {
-    const { W, H, u } = this.L; const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d'); this.statics = cv;
-    // 가죽 질감 패턴
-    if (!this.grain) { const g = document.createElement('canvas'); g.width = g.height = 96; const gc = g.getContext('2d'); const id = gc.createImageData(96, 96); for (let i = 0; i < id.data.length; i += 4) { const v = 128 + (Math.random() - 0.5) * 120; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 22; } gc.putImageData(id, 0, 0); this.grain = g; }
-    const grain = c.createPattern(this.grain, 'repeat');
-    const rr = (x, y, w, h, r) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
-    // ---- 천장/햇빛가리개
-    let gr = c.createLinearGradient(0, 0, 0, H * 0.06); gr.addColorStop(0, '#1b1c20'); gr.addColorStop(1, '#2c2e33');
-    c.fillStyle = gr; c.beginPath(); c.moveTo(0, 0); c.lineTo(W, 0); c.lineTo(W, H * 0.026); c.quadraticCurveTo(W * 0.5, H * 0.05, 0, H * 0.026); c.fill();
-    for (const sx of [0.085, 0.69]) { gr = c.createLinearGradient(0, 0, 0, H * 0.075); gr.addColorStop(0, '#2f3136'); gr.addColorStop(1, '#202226'); c.fillStyle = gr; rr(sx * W, -2 * u, 0.225 * W, 8.2 * u, 1.4 * u); c.fill(); c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 0.25 * u; c.stroke(); }
-    c.fillStyle = '#0b0c0e'; c.fillRect(W * 0.492, 0, W * 0.016, 2.4 * u); // 룸미러 스테이
-    // ---- A필러 (+ 바깥쪽 도어 프레임)
-    const pill = (sgn) => {
-      const X = (f) => (sgn < 0 ? f * W : W - f * W);
-      gr = c.createLinearGradient(X(0), 0, X(0.08), 0); gr.addColorStop(0, '#0a0b0d'); gr.addColorStop(0.7, '#17181c'); gr.addColorStop(1, '#25272c');
-      c.fillStyle = gr; c.beginPath(); c.moveTo(X(0), 0); c.lineTo(X(0.082), 0); c.lineTo(X(0.03), H * 0.60); c.lineTo(X(0.012), H * 0.72); c.lineTo(X(0), H * 0.8); c.fill();
-      c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 0.3 * u; c.beginPath(); c.moveTo(X(0.082), 0); c.lineTo(X(0.03), H * 0.60); c.stroke();
-      c.strokeStyle = '#000'; c.lineWidth = 0.5 * u; c.beginPath(); c.moveTo(X(0.0775), 0); c.lineTo(X(0.0255), H * 0.60); c.stroke();
-    };
-    pill(-1); pill(1);
-    // ---- 대시보드 패드
-    const topY = (x) => { const t = x / W; return (1 - t) * (1 - t) * 0.74 * H + 2 * t * (1 - t) * 0.645 * H + t * t * 0.74 * H; };
-    const dash = () => { c.beginPath(); c.moveTo(0, 0.74 * H); c.quadraticCurveTo(W * 0.5, 0.645 * H, W, 0.74 * H); c.lineTo(W, H); c.lineTo(0, H); c.closePath(); };
-    gr = c.createLinearGradient(0, 0.64 * H, 0, H); gr.addColorStop(0, '#31343b'); gr.addColorStop(0.07, '#1d1f24'); gr.addColorStop(0.35, '#15161a'); gr.addColorStop(1, '#0c0d0f');
-    c.fillStyle = gr; dash(); c.fill(); c.fillStyle = grain; dash(); c.fill();
-    // 윗면 하이라이트(앞유리 반사)
-    gr = c.createLinearGradient(0, 0.64 * H, 0, 0.72 * H); gr.addColorStop(0, 'rgba(160,185,220,.22)'); gr.addColorStop(1, 'rgba(160,185,220,0)'); c.fillStyle = gr; dash(); c.fill();
-    c.strokeStyle = 'rgba(255,255,255,.16)'; c.lineWidth = 0.35 * u; c.beginPath(); c.moveTo(0, 0.74 * H); c.quadraticCurveTo(W * 0.5, 0.645 * H, W, 0.74 * H); c.stroke();
-    // 스티치 라인
-    c.save(); c.setLineDash([0.9 * u, 0.7 * u]); c.strokeStyle = 'rgba(200,205,215,.25)'; c.lineWidth = 0.22 * u; c.beginPath(); c.moveTo(0, 0.76 * H); c.quadraticCurveTo(W * 0.5, 0.665 * H, W, 0.76 * H); c.stroke(); c.restore();
-    // ---- 송풍구
-    const vent = (x, y, w, h) => { c.fillStyle = '#07080a'; rr(x, y, w, h, 0.8 * u); c.fill(); c.strokeStyle = '#3b3f47'; c.lineWidth = 0.3 * u; c.stroke(); c.strokeStyle = '#1d2026'; c.lineWidth = 0.28 * u; for (let i = 1; i < 5; i++) { c.beginPath(); c.moveTo(x + 0.6 * u, y + (h * i) / 5); c.lineTo(x + w - 0.6 * u, y + (h * i) / 5); c.stroke(); } };
-    vent(0.15 * W, 0.725 * H, 0.075 * W, 3.2 * u); vent(0.26 * W, 0.717 * H, 0.06 * W, 3.0 * u);
-    // ---- 계기판 후드
-    gr = c.createLinearGradient(0, 0.7 * H, 0, 0.78 * H); gr.addColorStop(0, '#0d0e10'); gr.addColorStop(1, '#17181c'); c.fillStyle = gr;
-    c.beginPath(); c.moveTo(W * 0.5 - 30 * u, 0.775 * H); c.quadraticCurveTo(W * 0.5 - 31 * u, 0.70 * H, W * 0.5 - 22 * u, 0.695 * H); c.lineTo(W * 0.5 + 22 * u, 0.695 * H); c.quadraticCurveTo(W * 0.5 + 31 * u, 0.70 * H, W * 0.5 + 30 * u, 0.775 * H); c.closePath(); c.fill();
-    c.strokeStyle = 'rgba(255,255,255,.1)'; c.lineWidth = 0.3 * u; c.stroke();
-    // ---- 센터 스크린 베젤
-    const s = this.L.screen; c.fillStyle = '#040506'; rr(s.x - 0.8 * u, s.y - 0.8 * u, s.w + 1.6 * u, s.h + 1.6 * u, 1.2 * u); c.fill(); c.strokeStyle = '#2a2d33'; c.lineWidth = 0.3 * u; c.stroke();
-    // ---- 도어 트림 (좌) + 손잡이 받침
-    gr = c.createLinearGradient(0, 0, W * 0.06, 0); gr.addColorStop(0, '#0f1012'); gr.addColorStop(1, '#1b1d21'); c.fillStyle = gr;
-    c.beginPath(); c.moveTo(0, 0.7 * H); c.lineTo(W * 0.07, 0.745 * H); c.lineTo(W * 0.07, H); c.lineTo(0, H); c.fill(); c.fillStyle = grain; c.fill();
-    c.strokeStyle = 'rgba(255,255,255,.09)'; c.lineWidth = 0.3 * u; c.beginPath(); c.moveTo(0, 0.7 * H); c.lineTo(W * 0.07, 0.745 * H); c.stroke();
-    const d = this.L.door; c.fillStyle = '#050607'; rr(d.x - 1.4 * u, d.y - 1.2 * u, d.w + 2.8 * u, d.h + 2.4 * u, 1.4 * u); c.fill();
-    // ---- 센터 콘솔
-    const cs = this.L.console; gr = c.createLinearGradient(cs.x, 0, cs.x + cs.w, 0); gr.addColorStop(0, '#0c0d0f'); gr.addColorStop(0.5, '#1a1c20'); gr.addColorStop(1, '#0c0d0f');
-    c.fillStyle = gr; rr(cs.x, cs.y, cs.w, cs.h + 4 * u, 2 * u); c.fill(); c.strokeStyle = 'rgba(255,255,255,.1)'; c.lineWidth = 0.3 * u; c.stroke(); c.fillStyle = grain; rr(cs.x, cs.y, cs.w, cs.h + 4 * u, 2 * u); c.fill();
-    // 기어 게이트(홈)
-    const gt = this.L.gate; c.fillStyle = '#020203'; c.strokeStyle = '#4b5059'; c.lineWidth = 0.35 * u;
+  // 센터콘솔 조작 패드: 변속 게이트 + 노브 + 사이드브레이크 (3D 콘솔의 레버도 같이 움직임)
+  _pad(c, veh) {
+    const L = this.L, u = L.u, k = this.knob || this._slotPos('P'); const rr = (x, y, w, h, r) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
+    const cs = L.console; c.save();
+    c.fillStyle = 'rgba(6,8,12,.55)'; rr(0.668 * L.W, 0.735 * L.H, 0.195 * L.W, 0.265 * L.H + 2 * u, 2 * u); c.fill(); c.strokeStyle = 'rgba(255,255,255,.14)'; c.lineWidth = 0.3 * u; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.4)'; c.font = `${1.5 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('변속 · 주차 · 안전띠', 0.7655 * L.W, 0.75 * L.H);
+    const gt = L.gate; c.fillStyle = 'rgba(0,0,0,.7)'; c.strokeStyle = '#59606c'; c.lineWidth = 0.35 * u;
     if (this.trans === 'AT') { rr(gt.x, gt.y - 1.2 * u, gt.w, gt.h + 2.4 * u, gt.w / 2); c.fill(); c.stroke(); }
     else {
-      const cols = this.L.cols, rows = this.L.rows, sw = 2.6 * u; c.lineCap = 'round'; c.strokeStyle = '#4b5059'; c.lineWidth = sw + 0.7 * u; c.beginPath(); for (const x of cols) { c.moveTo(x, rows[0]); c.lineTo(x, rows[2]); } c.moveTo(cols[0], rows[1]); c.lineTo(cols[2], rows[1]); c.stroke();
-      c.strokeStyle = '#020203'; c.lineWidth = sw; c.beginPath(); for (const x of cols) { c.moveTo(x, rows[0]); c.lineTo(x, rows[2]); } c.moveTo(cols[0], rows[1]); c.lineTo(cols[2], rows[1]); c.stroke();
-      c.fillStyle = '#8b93a1'; c.font = `bold ${2.1 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-      for (const s2 of this.L.slots) c.fillText(String(s2.g), s2.x + (s2.g === 'R' || s2.g === 5 || s2.g === 3 || s2.g === 1 || s2.g === 2 || s2.g === 4 ? 0 : 0), s2.y + (s2.y < rows[1] ? -3.2 * u : 3.2 * u));
+      const cols = L.cols, rows = L.rows, sw = 2.6 * u; c.lineCap = 'round'; c.strokeStyle = '#59606c'; c.lineWidth = sw + 0.7 * u; c.beginPath(); for (const x of cols) { c.moveTo(x, rows[0]); c.lineTo(x, rows[2]); } c.moveTo(cols[0], rows[1]); c.lineTo(cols[2], rows[1]); c.stroke();
+      c.strokeStyle = '#05060a'; c.lineWidth = sw; c.beginPath(); for (const x of cols) { c.moveTo(x, rows[0]); c.lineTo(x, rows[2]); } c.moveTo(cols[0], rows[1]); c.lineTo(cols[2], rows[1]); c.stroke();
+      c.fillStyle = '#9aa3b1'; c.font = `bold ${2.1 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      for (const s2 of L.slots) c.fillText(String(s2.g), s2.x, s2.y + (s2.y < rows[1] ? -3.2 * u : 3.2 * u));
     }
-    // ---- 발판(풋웰) 어둠
-    gr = c.createLinearGradient(0, 0.72 * H, 0, H); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.5)'); c.fillStyle = gr; c.fillRect(0, 0.72 * H, W, 0.28 * H);
-  }
-
-  _cluster(c, veh, time, g) {
-    const { u } = this.L; const k = this.L.cl; const on = veh.engineOn; const blink = Math.floor(time * 2.6) % 2 === 0;
-    // 계기판 패널
-    c.save();
-    c.fillStyle = '#030406'; c.beginPath(); c.roundRect(k.cx - k.off - k.R * 1.35, k.cy - k.R * 1.3, k.off * 2 + k.R * 2.7, k.R * 2.6, 2.2 * u); c.fill();
-    const gauge = (x, val, max, labels, unit, redFrom) => {
-      const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25, R = k.R;
-      const gd = c.createRadialGradient(x, k.cy, R * 0.2, x, k.cy, R * 1.05); gd.addColorStop(0, '#0b0f15'); gd.addColorStop(1, '#161c26'); c.fillStyle = gd; c.beginPath(); c.arc(x, k.cy, R * 1.12, 0, TAU); c.fill();
-      c.strokeStyle = '#323a47'; c.lineWidth = 0.35 * u; c.stroke();
-      const lit = on ? 1 : 0.28; c.globalAlpha = lit;
-      if (redFrom != null) { c.strokeStyle = '#d63a2f'; c.lineWidth = 0.9 * u; c.beginPath(); c.arc(x, k.cy, R * 0.93, a0 + (a1 - a0) * redFrom, a1); c.stroke(); }
-      const n = labels.length - 1; const sub = labels.length > 7 ? 5 : 4;
-      for (let i = 0; i <= n * sub; i++) { const a = a0 + (a1 - a0) * i / (n * sub), maj = i % sub === 0; const r0 = R * (maj ? 0.8 : 0.86), r1 = R * 0.95; c.strokeStyle = redFrom != null && i / (n * sub) >= redFrom ? '#ff6a5a' : '#cfd8e6'; c.lineWidth = (maj ? 0.34 : 0.18) * u; c.beginPath(); c.moveTo(x + Math.cos(a) * r0, k.cy + Math.sin(a) * r0); c.lineTo(x + Math.cos(a) * r1, k.cy + Math.sin(a) * r1); c.stroke(); }
-      c.fillStyle = '#e6edf7'; c.font = `600 ${1.55 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-      labels.forEach((t, i) => { const a = a0 + (a1 - a0) * i / n; c.fillText(String(t), x + Math.cos(a) * R * 0.62, k.cy + Math.sin(a) * R * 0.62); });
-      c.fillStyle = '#7f8ca0'; c.font = `${1.3 * u}px sans-serif`; c.fillText(unit, x, k.cy + R * 0.34);
-      c.globalAlpha = 1;
-      // 바늘 (엔진 꺼짐: 0)
-      const v = on ? clamp(val / max, 0, 1) : 0; const a = a0 + (a1 - a0) * v;
-      c.save(); c.translate(x, k.cy); c.rotate(a); c.shadowColor = 'rgba(255,90,40,.8)'; c.shadowBlur = 1.2 * u; c.fillStyle = '#ff5a26'; c.beginPath(); c.moveTo(-R * 0.14, -0.28 * u); c.lineTo(R * 0.93, -0.1 * u); c.lineTo(R * 0.93, 0.1 * u); c.lineTo(-R * 0.14, 0.28 * u); c.closePath(); c.fill(); c.restore();
-      c.fillStyle = '#1b2029'; c.beginPath(); c.arc(x, k.cy, R * 0.12, 0, TAU); c.fill(); c.strokeStyle = '#475163'; c.lineWidth = 0.25 * u; c.stroke();
-    };
-    gauge(k.cx - k.off, veh.kmh, 200, [0, 40, 80, 120, 160, 200], 'km/h', null);
-    gauge(k.cx + k.off, veh.rpm, 8000, [0, 1, 2, 3, 4, 5, 6, 7, 8], '×1000 rpm', 0.78);
-    // 가운데 정보창
-    const gl = String(veh.gearLabel());
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.globalAlpha = on ? 1 : 0.3;
-    c.fillStyle = veh.gear === 'R' ? '#ff7a7a' : '#8dffb2'; c.font = `800 ${5 * u}px sans-serif`; c.fillText(gl, k.cx, k.cy - 0.4 * u);
-    c.fillStyle = '#cdd6e4'; c.font = `700 ${2.3 * u}px sans-serif`; c.fillText(Math.round(veh.kmh) + ' km/h', k.cx, k.cy + 3.9 * u);
-    c.fillStyle = '#6f7b8e'; c.font = `${1.3 * u}px sans-serif`; c.fillText(on ? 'READY' : 'OFF', k.cx, k.cy + 6.1 * u); c.globalAlpha = 1;
-    // 방향지시등 화살표
-    const arrow = (x, dir, lit) => { c.fillStyle = lit ? '#37ff74' : '#1c2a22'; c.beginPath(); c.moveTo(x + dir * 1.9 * u, k.cy - 5.3 * u); c.lineTo(x - dir * 0.2 * u, k.cy - 7.1 * u); c.lineTo(x - dir * 0.2 * u, k.cy - 6 * u); c.lineTo(x - dir * 2 * u, k.cy - 6 * u); c.lineTo(x - dir * 2 * u, k.cy - 4.6 * u); c.lineTo(x - dir * 0.2 * u, k.cy - 4.6 * u); c.lineTo(x - dir * 0.2 * u, k.cy - 3.5 * u); c.closePath(); c.fill(); };
-    arrow(k.cx - 3.2 * u, -1, (veh.left || veh.hazard) && blink); arrow(k.cx + 3.2 * u, 1, (veh.right || veh.hazard) && blink);
-    // 경고등
-    const y = k.cy + k.R * 1.0; const icons = [
-      [!veh.belt, '#ff3b30', (x) => { c.beginPath(); c.arc(x, y - 0.9 * u, 0.55 * u, 0, TAU); c.fill(); c.lineWidth = 0.35 * u; c.beginPath(); c.moveTo(x - 0.9 * u, y); c.lineTo(x + 0.2 * u, y + 1.5 * u); c.moveTo(x - 0.1 * u, y - 0.2 * u); c.lineTo(x - 0.1 * u, y + 1.5 * u); c.stroke(); }],
-      [!veh.doorClosed, '#ff3b30', (x) => { c.lineWidth = 0.3 * u; c.strokeRect(x - 1.1 * u, y - 1.2 * u, 2.2 * u, 2.3 * u); c.fillRect(x - 1.1 * u, y - 1.2 * u, 0.7 * u, 2.3 * u); }],
-      [veh.handbrake, '#ff3b30', (x) => { c.lineWidth = 0.3 * u; c.beginPath(); c.arc(x, y, 1.15 * u, 0, TAU); c.stroke(); c.font = `bold ${1.5 * u}px sans-serif`; c.fillText('P', x, y + 0.1 * u); }],
-      [on, '#35e07b', (x) => { c.font = `bold ${1.2 * u}px sans-serif`; c.fillText('RDY', x, y); }],
-      [veh.headlight > 0, veh.headlight === 2 ? '#3d8bff' : '#35e07b', (x) => { c.lineWidth = 0.3 * u; c.beginPath(); c.arc(x, y, 1.1 * u, -Math.PI / 2, Math.PI / 2); c.lineTo(x - 0.5 * u, y + 1.1 * u); c.lineTo(x - 0.5 * u, y - 1.1 * u); c.closePath(); c.stroke(); for (let i = -1; i <= 1; i++) { c.beginPath(); c.moveTo(x - 0.9 * u, y + i * 0.6 * u); c.lineTo(x - 1.7 * u, y + i * 0.6 * u); c.stroke(); } }],
-      [veh.wiper > 0, '#35e07b', (x) => { c.font = `bold ${1.2 * u}px sans-serif`; c.fillText('W' + veh.wiper, x, y); }],
-    ];
-    icons.forEach(([lit, col, fn], i) => { const x = k.cx + (i - 2.5) * 4.4 * u; c.save(); c.globalAlpha = lit ? 1 : 0.18; c.fillStyle = lit ? col : '#8a93a3'; c.strokeStyle = lit ? col : '#8a93a3'; c.textAlign = 'center'; c.textBaseline = 'middle'; fn(x); c.restore(); });
-    c.restore();
-    // 유리 반사
-    const gl2 = c.createLinearGradient(0, k.cy - k.R * 1.3, 0, k.cy + k.R * 1.3); gl2.addColorStop(0, 'rgba(255,255,255,.07)'); gl2.addColorStop(0.45, 'rgba(255,255,255,0)'); c.fillStyle = gl2; c.beginPath(); c.roundRect(k.cx - k.off - k.R * 1.35, k.cy - k.R * 1.3, k.off * 2 + k.R * 2.7, k.R * 2.6, 2.2 * u); c.fill();
-  }
-
-  _screen(c, veh) {
-    const { u } = this.L, s = this.L.screen; const on = veh.engineOn;
-    c.save(); c.beginPath(); c.roundRect(s.x, s.y, s.w, s.h, 0.9 * u); c.clip();
-    if (on) {
-      const g = c.createLinearGradient(0, s.y, 0, s.y + s.h); g.addColorStop(0, '#142033'); g.addColorStop(1, '#0a1220'); c.fillStyle = g; c.fillRect(s.x, s.y, s.w, s.h);
-      const d = new Date(); const hh = String(d.getHours()).padStart(2, '0'), mm = String(d.getMinutes()).padStart(2, '0');
-      c.fillStyle = '#e9f1ff'; c.font = `700 ${3.3 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`${hh}:${mm}`, s.x + s.w / 2, s.y + 3.2 * u);
-      c.fillStyle = '#7e93b3'; c.font = `${1.5 * u}px sans-serif`; c.fillText(veh.headlight ? '전조등 ON' : '21°C · AUTO', s.x + s.w / 2, s.y + 6.4 * u);
-    } else { c.fillStyle = '#05070a'; c.fillRect(s.x, s.y, s.w, s.h); const g = c.createLinearGradient(s.x, s.y, s.x + s.w, s.y + s.h); g.addColorStop(0, 'rgba(255,255,255,.06)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(s.x, s.y, s.w, s.h); }
-    c.restore();
-  }
-
-  _stalks(c) {
-    const L = this.L, u = L.u;
-    const stalk = (s, tilt) => {
-      const tx = s.tx, ty = s.ty + tilt * 5 * u; const g = c.createLinearGradient(s.bx, s.by, tx, ty);
-      c.lineCap = 'round'; c.strokeStyle = '#08090b'; c.lineWidth = 3.4 * u; c.beginPath(); c.moveTo(s.bx, s.by); c.lineTo(tx, ty); c.stroke();
-      c.strokeStyle = '#2b2e34'; c.lineWidth = 2.5 * u; c.beginPath(); c.moveTo(s.bx, s.by - 0.1 * u); c.lineTo(tx, ty - 0.1 * u); c.stroke();
-      c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 0.45 * u; c.beginPath(); c.moveTo(s.bx, s.by - 0.8 * u); c.lineTo(tx, ty - 0.8 * u); c.stroke();
-      c.fillStyle = '#16181c'; c.beginPath(); c.ellipse(tx, ty, 1.5 * u, 1.9 * u, 0, 0, TAU); c.fill(); c.strokeStyle = '#3a3e46'; c.lineWidth = 0.3 * u; c.stroke();
-    };
-    stalk(L.stL, this.stalkL); stalk(L.stR, this.stalkR);
-    // 레버 위치 표시 (눈금)
-    c.fillStyle = 'rgba(255,255,255,.35)'; c.font = `${1.5 * u}px sans-serif`; c.textAlign = 'center';
-    c.fillText('▲우', L.stL.tx, L.stL.ty - 6.6 * u); c.fillText('▼좌', L.stL.tx, L.stL.ty + 8.6 * u);
-  }
-
-  _wheel(c, veh) {
-    const { cx, cy, R } = this.L.wheel, u = this.L.u; c.save(); c.translate(cx, cy); c.rotate(this.wheel);
-    // 그림자
-    c.shadowColor = 'rgba(0,0,0,.55)'; c.shadowBlur = 2.4 * u; c.shadowOffsetY = 0.8 * u;
-    // 스포크
-    const spoke = (a, w0, w1) => { c.save(); c.rotate(a); const g = c.createLinearGradient(0, -w0, 0, w0); g.addColorStop(0, '#2c2f35'); g.addColorStop(0.5, '#1b1d21'); g.addColorStop(1, '#0f1013'); c.fillStyle = g; c.beginPath(); c.moveTo(R * 0.12, -w0); c.lineTo(R * 0.97, -w1); c.lineTo(R * 0.97, w1); c.lineTo(R * 0.12, w0); c.closePath(); c.fill(); c.restore(); };
-    spoke(Math.PI, 3.1 * u, 2.2 * u); spoke(0, 3.1 * u, 2.2 * u); spoke(Math.PI / 2, 3.4 * u, 2.4 * u);
-    c.shadowColor = 'transparent';
-    // 림 (가죽)
-    const rim = c.createLinearGradient(-R, -R, R, R); rim.addColorStop(0, '#4a4e57'); rim.addColorStop(0.28, '#262930'); rim.addColorStop(0.55, '#15171b'); rim.addColorStop(1, '#2d3037');
-    c.strokeStyle = '#000'; c.lineWidth = 5.4 * u; c.beginPath(); c.arc(0, 0, R, 0, TAU); c.stroke();
-    c.strokeStyle = rim; c.lineWidth = 4.7 * u; c.beginPath(); c.arc(0, 0, R, 0, TAU); c.stroke();
-    c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = 0.5 * u; c.beginPath(); c.arc(0, 0, R + 1.5 * u, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
-    c.strokeStyle = 'rgba(0,0,0,.6)'; c.lineWidth = 0.4 * u; c.beginPath(); c.arc(0, 0, R - 1.6 * u, 0, TAU); c.stroke();
-    // 스티치
-    c.save(); c.setLineDash([0.7 * u, 0.55 * u]); c.strokeStyle = 'rgba(190,196,208,.45)'; c.lineWidth = 0.18 * u; c.beginPath(); c.arc(0, 0, R + 0.1 * u, 0, TAU); c.stroke(); c.restore();
-    // 그립 홈(9시/3시)
-    c.fillStyle = 'rgba(255,255,255,.07)'; for (const a of [Math.PI, 0]) { c.save(); c.rotate(a); c.beginPath(); c.roundRect(R - 2.2 * u, -4.6 * u, 4.4 * u, 9.2 * u, 1.6 * u); c.fill(); c.restore(); }
-    // 12시 표시
-    c.fillStyle = '#d7dbe3'; c.fillRect(-0.45 * u, -R - 2.3 * u, 0.9 * u, 4.6 * u);
-    // 스포크 스위치
-    c.fillStyle = '#0a0b0d'; for (const sx of [-1, 1]) { c.beginPath(); c.roundRect(sx * R * 0.52 - 1.9 * u, -1.1 * u, 3.8 * u, 2.2 * u, 0.6 * u); c.fill(); }
-    c.fillStyle = '#58606e'; for (const sx of [-1, 1]) for (let i = -1; i <= 1; i++) { c.beginPath(); c.arc(sx * R * 0.52 + i * 1.1 * u, 0, 0.3 * u, 0, TAU); c.fill(); }
-    // 허브(에어백 패드)
-    const hg = c.createRadialGradient(-2 * u, -3 * u, 1 * u, 0, 0, 9 * u); hg.addColorStop(0, '#3a3e46'); hg.addColorStop(1, '#14161a'); c.fillStyle = hg; c.beginPath(); c.roundRect(-8.5 * u, -7.5 * u, 17 * u, 15 * u, 4.5 * u); c.fill(); c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 0.3 * u; c.stroke();
-    c.fillStyle = '#9aa2b0'; c.beginPath(); c.arc(0, -0.5 * u, 2.4 * u, 0, TAU); c.fill(); c.fillStyle = '#1a1c20'; c.beginPath(); c.arc(0, -0.5 * u, 1.7 * u, 0, TAU); c.fill();
-    c.restore();
-  }
-
-  _console(c, veh) {
-    const L = this.L, u = L.u, k = this.knob || this._slotPos('P');
-    // 기어 표시 글자
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    if (this.trans === 'AT') {
-      L.slots.forEach((s) => { const cur = String(veh.gear) === s.g; c.fillStyle = cur ? (s.g === 'R' ? '#ff6a6a' : '#8dffb2') : '#6c7482'; c.font = `${cur ? 800 : 600} ${2.2 * u}px sans-serif`; c.fillText(s.g, s.x + 4.6 * u, s.y); });
-    }
-    // 손잡이(노브)
-    const R = this.trans === 'AT' ? 2.7 * u : 2.5 * u; const g = c.createRadialGradient(k.x - R * 0.35, k.y - R * 0.4, R * 0.15, k.x, k.y, R * 1.1); g.addColorStop(0, '#5a5f69'); g.addColorStop(0.55, '#1f2227'); g.addColorStop(1, '#0a0b0d');
+    if (this.trans === 'AT') L.slots.forEach((s) => { const cur = String(veh.gear) === s.g; c.fillStyle = cur ? (s.g === 'R' ? '#ff6a6a' : '#8dffb2') : '#7b8494'; c.font = `${cur ? 800 : 600} ${2.2 * u}px sans-serif`; c.fillText(s.g, s.x + 4.6 * u, s.y); });
+    const R = this.trans === 'AT' ? 2.7 * u : 2.5 * u; const g = c.createRadialGradient(k.x - R * 0.35, k.y - R * 0.4, R * 0.15, k.x, k.y, R * 1.1); g.addColorStop(0, '#6a707b'); g.addColorStop(0.55, '#2a2d33'); g.addColorStop(1, '#0d0e11');
     c.shadowColor = 'rgba(0,0,0,.6)'; c.shadowBlur = 1.4 * u; c.shadowOffsetY = 0.6 * u; c.fillStyle = g; c.beginPath(); c.arc(k.x, k.y, R, 0, TAU); c.fill(); c.shadowColor = 'transparent';
-    c.strokeStyle = 'rgba(255,255,255,.16)'; c.lineWidth = 0.3 * u; c.stroke();
-    if (this.trans === 'AT') { c.fillStyle = '#c9ced8'; c.font = `bold ${1.6 * u}px sans-serif`; c.fillText(String(veh.gear), k.x, k.y); }
-    // 사이드브레이크 레버
-    const p = L.pb, t = this.pbT; const baseY = p.y1; const topY = baseY - (5 + 14 * t) * u; const tilt = -0.9 * u * t;
+    c.strokeStyle = 'rgba(255,255,255,.2)'; c.lineWidth = 0.3 * u; c.stroke();
+    if (this.trans === 'AT') { c.fillStyle = '#d3d8e2'; c.font = `bold ${1.6 * u}px sans-serif`; c.fillText(String(veh.gear), k.x, k.y); }
+    // 사이드브레이크
+    const p = L.pb, t = this.pbT; const baseY = p.y1; const topY = baseY - (4 + 9 * t) * u; const tilt = -0.9 * u * t;
     c.lineCap = 'round'; c.strokeStyle = '#050607'; c.lineWidth = 3.2 * u; c.beginPath(); c.moveTo(p.x, baseY); c.lineTo(p.x + tilt, topY); c.stroke();
-    c.strokeStyle = '#4a4f59'; c.lineWidth = 2.1 * u; c.beginPath(); c.moveTo(p.x, baseY); c.lineTo(p.x + tilt, topY); c.stroke();
-    c.fillStyle = '#16181c'; c.beginPath(); c.roundRect(p.x + tilt - 2.2 * u, topY - 2.4 * u, 4.4 * u, 3.6 * u, 1.2 * u); c.fill(); c.strokeStyle = 'rgba(255,255,255,.2)'; c.lineWidth = 0.3 * u; c.stroke();
-    c.fillStyle = veh.handbrake ? '#ff4538' : '#5d6471'; c.font = `bold ${1.7 * u}px sans-serif`; c.fillText('P.B', p.x, baseY + 2.6 * u);
-  }
-
-  _buttons(c, veh, time) {
-    const L = this.L, u = L.u; const blink = Math.floor(time * 2.6) % 2 === 0;
-    const round = (b, lit, col, draw) => { c.fillStyle = '#040506'; c.beginPath(); c.arc(b.x, b.y, b.r + 0.8 * u, 0, TAU); c.fill(); const g = c.createRadialGradient(b.x - b.r * 0.3, b.y - b.r * 0.4, b.r * 0.1, b.x, b.y, b.r); g.addColorStop(0, lit ? col : '#3a3e46'); g.addColorStop(1, lit ? col + 'aa' : '#17191d'); c.fillStyle = g; c.beginPath(); c.arc(b.x, b.y, b.r, 0, TAU); c.fill(); c.strokeStyle = 'rgba(255,255,255,.2)'; c.lineWidth = 0.25 * u; c.stroke(); if (draw) draw(); };
-    // 시동 버튼
-    const s = L.start; round(s, veh.engineOn, '#ff3d2e', () => { c.fillStyle = '#e8ecf3'; c.font = `bold ${1.15 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('ENGINE', s.x, s.y - 0.7 * u); c.fillText('START', s.x, s.y + 0.4 * u); c.fillText('STOP', s.x, s.y + 1.5 * u); });
-    // 비상등
-    const h = L.hazard; round(h, veh.hazard && blink, '#ff3d2e', () => { c.strokeStyle = veh.hazard && blink ? '#fff' : '#d33a30'; c.lineWidth = 0.4 * u; c.beginPath(); c.moveTo(h.x, h.y - 1.3 * u); c.lineTo(h.x + 1.3 * u, h.y + 1 * u); c.lineTo(h.x - 1.3 * u, h.y + 1 * u); c.closePath(); c.stroke(); });
-    // 라이트 다이얼
-    const d = L.dial; c.fillStyle = '#040506'; c.beginPath(); c.arc(d.x, d.y, d.r + 0.9 * u, 0, TAU); c.fill();
-    const dg = c.createRadialGradient(d.x - 1, d.y - 1, 0.3 * u, d.x, d.y, d.r); dg.addColorStop(0, '#4b4f58'); dg.addColorStop(1, '#17191d'); c.fillStyle = dg; c.beginPath(); c.arc(d.x, d.y, d.r, 0, TAU); c.fill();
-    c.save(); c.translate(d.x, d.y); c.rotate([-0.9, 0, 0.9][veh.headlight | 0] - 0); c.fillStyle = '#e8ecf3'; c.fillRect(-0.2 * u, -d.r, 0.4 * u, d.r * 0.55); c.restore();
-    c.fillStyle = '#7e8696'; c.font = `${1.35 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(['OFF', '하향', '상향'][veh.headlight | 0], d.x, d.y + d.r + 2.1 * u);
-    // 문 손잡이
-    const dr = L.door; const open = !veh.doorClosed; const g2 = c.createLinearGradient(dr.x, dr.y, dr.x, dr.y + dr.h); g2.addColorStop(0, open ? '#ff6a5e' : '#9aa1ad'); g2.addColorStop(1, open ? '#b3261e' : '#4d535e');
-    c.fillStyle = g2; c.beginPath(); c.roundRect(dr.x, dr.y, dr.w, dr.h, 1.4 * u); c.fill(); c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 0.25 * u; c.stroke();
-    c.fillStyle = open ? '#ff8a80' : '#7c8492'; c.font = `bold ${1.6 * u}px sans-serif`; c.textAlign = 'center'; c.fillText(open ? '문 열림' : '문', dr.x + dr.w / 2, dr.y + dr.h + 3.1 * u);
+    c.strokeStyle = '#5a606b'; c.lineWidth = 2.1 * u; c.beginPath(); c.moveTo(p.x, baseY); c.lineTo(p.x + tilt, topY); c.stroke();
+    c.fillStyle = '#1b1d22'; c.beginPath(); c.roundRect(p.x + tilt - 2.2 * u, topY - 2.4 * u, 4.4 * u, 3.6 * u, 1.2 * u); c.fill(); c.strokeStyle = 'rgba(255,255,255,.25)'; c.lineWidth = 0.3 * u; c.stroke();
+    c.fillStyle = veh.handbrake ? '#ff4538' : '#7a828f'; c.font = `bold ${1.7 * u}px sans-serif`; c.fillText('P.B', p.x, baseY + 2.6 * u);
+    c.restore();
   }
 
   _pedals(c) {
@@ -3877,7 +4024,9 @@ class Cockpit {
     c.fillStyle = 'rgba(255,255,255,.55)'; c.font = `${1.35 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(veh.belt ? '안전띠 해제' : '안전띠', b.x, b.y + 4.5 * u);
     const strap = (x0, y0, x1, y1) => { c.lineCap = 'round'; c.strokeStyle = '#0a0a0c'; c.lineWidth = 3.4 * u; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); c.strokeStyle = '#2b2d33'; c.lineWidth = 2.7 * u; c.stroke(); c.strokeStyle = 'rgba(255,255,255,.1)'; c.lineWidth = 0.2 * u; c.setLineDash([0.5 * u, 0.4 * u]); c.stroke(); c.setLineDash([]); };
     const tongue = (x, y) => { c.fillStyle = '#c3c9d4'; c.beginPath(); c.roundRect(x - 1.7 * u, y - 2.2 * u, 3.4 * u, 4.4 * u, 0.8 * u); c.fill(); c.fillStyle = '#10131a'; c.beginPath(); c.roundRect(x - 1 * u, y - 1.2 * u, 2 * u, 1.2 * u, 0.4 * u); c.fill(); };
-    if (veh.belt) { strap(a.x, a.y, b.x, b.y - 0.3 * u); tongue(b.x, b.y - 1.5 * u); }
+    if (veh.belt) { // 착용: 어깨띠가 화면 왼쪽 가장자리를 따라 내려옴
+      c.save(); const g = c.createLinearGradient(0, 0, 0, 0.6 * L.H); g.addColorStop(0, '#1a1b20'); g.addColorStop(1, 'rgba(26,27,32,0)'); c.lineCap = 'butt'; c.strokeStyle = g; c.lineWidth = 3.6 * u; c.beginPath(); c.moveTo(a.x - 0.5 * u, a.y); c.lineTo(a.x + 3.2 * u, 0.6 * L.H); c.stroke(); c.restore();
+      c.fillStyle = '#040506'; c.beginPath(); c.roundRect(b.x - 2.2 * u, b.y - 2.8 * u, 4.4 * u, 5.6 * u, 1 * u); c.fill(); c.fillStyle = '#35e07b'; c.beginPath(); c.roundRect(b.x - 1.2 * u, b.y - 0.7 * u, 2.4 * u, 1.4 * u, 0.5 * u); c.fill(); }
     else {
       const d = this.beltDrag; const x = d ? d.x : t.x, y = d ? d.y : t.y; strap(a.x, a.y, x, y - 2 * u); tongue(x, y);
       if (!d) { c.fillStyle = 'rgba(255,255,255,.6)'; c.font = `${1.4 * u}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('끌어서 버클에', t.x + 6 * u, t.y); }
@@ -3886,21 +4035,23 @@ class Cockpit {
   }
 
   _hints(c) {
-    const L = this.L, u = L.u; const a = Math.min(1, this.hint / 1.5);
-    const tag = (txt, x, y, ax, ay, align = 'center') => {
-      c.save(); c.globalAlpha = a; c.font = `bold ${1.9 * u}px sans-serif`; const w = c.measureText(txt).width + 2 * u; let bx = x - w / 2; if (align === 'left') bx = x; else if (align === 'right') bx = x - w;
-      c.strokeStyle = '#ffd24a'; c.lineWidth = 0.3 * u; c.beginPath(); c.moveTo(bx + w / 2, y + 1.5 * u); c.lineTo(ax, ay); c.stroke();
-      c.fillStyle = 'rgba(20,16,0,.82)'; c.strokeStyle = '#ffd24a'; c.beginPath(); c.roundRect(bx, y - 1.5 * u, w, 3 * u, 1 * u); c.fill(); c.stroke();
-      c.fillStyle = '#ffe08a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, bx + w / 2, y); c.restore();
-    };
-    const w = L.wheel; const W = L.W, H = L.H;
-    tag('안전띠: 벨트를 끌어 버클로', 0.17 * W, 0.56 * H, L.tongue.x + 2 * u, L.tongue.y + 2 * u);
-    tag('방향지시등 레버 ↑우 ↓좌', 0.265 * W, 0.655 * H, L.stL.tx, L.stL.ty - 3 * u);
-    tag('핸들: 테두리를 잡고 돌리기', 0.395 * W, 0.585 * H, w.cx - 0.1 * W, w.cy - w.R * 0.93);
-    tag('시동 (브레이크 밟고)', 0.54 * W, 0.655 * H, L.start.x, L.start.y - 3 * u);
-    tag('와이퍼 레버', 0.665 * W, 0.585 * H, L.stR.tx, L.stR.ty - 3 * u);
-    tag(this.trans === 'AT' ? '변속레버 ↑↓' : '클러치 밟고 H패턴', 0.775 * W, 0.655 * H, L.knob ? L.knob.x : 0.8 * W, L.gate.y + 2 * u);
-    tag('페달: 아래쪽을 누를수록 깊게', 0.995 * W, 0.585 * H, L.pedal.gas.x + 3 * u, L.pedal.gas.y + 2 * u, 'right');
+    const L = this.L, u = L.u; const a = Math.min(1, this.hint / 1.5); const W = L.W, H = L.H;
+    const tag = (txt, ax, ay, bx, by) => { if (ax < -1000 || ay < -1000) return;
+      c.save(); c.globalAlpha = a; c.font = `bold ${1.9 * u}px sans-serif`; const w = c.measureText(txt).width + 2 * u; bx = clamp(bx, w / 2 + u, W - w / 2 - u); by = clamp(by, 2.5 * u, H - 2.5 * u);
+      c.strokeStyle = '#ffd24a'; c.lineWidth = 0.3 * u; c.beginPath(); c.moveTo(bx, by + (ay > by ? 1.5 * u : -1.5 * u)); c.lineTo(ax, ay); c.stroke();
+      c.fillStyle = 'rgba(20,16,0,.85)'; c.beginPath(); c.roundRect(bx - w / 2, by - 1.5 * u, w, 3 * u, 1 * u); c.fill(); c.stroke();
+      c.fillStyle = '#ffe08a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, bx, by); c.restore(); };
+    const w = L.wheel;
+    tag('안전띠: 벨트를 끌어 버클로', L.tongue.x + 2 * u, L.tongue.y + 2 * u, 0.2 * W, 0.56 * H);
+    tag('화면을 좌우로 밀면 고개가 돌아갑니다', 0.5 * W, 0.3 * H, 0.5 * W, 0.34 * H);
+    tag('방향지시등 ↑우 ↓좌', L.stL.tx, L.stL.ty, L.stL.tx - 4 * u, L.stL.ty + 11 * u);
+    tag('핸들: 테두리를 잡고 돌리기', w.cx - w.R * 0.8, w.cy - (w.ry || w.R) * 0.5, w.cx - w.R * 1.1, w.cy - (w.ry || w.R) * 1.15);
+    tag('시동 (브레이크 밟고)', L.start.x, L.start.y, L.start.x + 2 * u, L.start.y - 11 * u);
+    tag('와이퍼 레버', L.stR.tx, L.stR.ty, L.stR.tx + 6 * u, L.stR.ty + 11 * u);
+    tag('라이트', L.dial.x, L.dial.y, L.dial.x, L.dial.y - 9 * u);
+    tag('문 손잡이', L.door.x + L.door.w / 2, L.door.y + L.door.h / 2, L.door.x + L.door.w / 2 + 4 * u, L.door.y - 6 * u);
+    tag(this.trans === 'AT' ? '변속 ↑↓' : '클러치 밟고 H패턴', 0.8 * W, 0.78 * H, 0.62 * W, 0.7 * H);
+    tag('페달: 아래쪽을 누를수록 깊게', L.pedal.gas.x + 3 * u, L.pedal.gas.y + 2 * u, 0.86 * W, 0.62 * H);
   }
 }
 
@@ -3910,7 +4061,8 @@ return { WHEEL_MAX, Cockpit };
 // ===== js/ui/view.js =====
 __m["js/ui/view.js"] = (() => {
 // 1인칭 렌더 오케스트레이터: 메인 시점 + 룸미러/사이드미러 + 조종석 오버레이(2D)
-const { GL3D, m4 } = __m["js/ui/gl3d.js"];
+const { GL3D, m4, hex3 } = __m["js/ui/gl3d.js"];
+const { Interior, MIR } = __m["js/ui/interior.js"];
 const { Scene } = __m["js/ui/scene.js"];
 const { Cockpit } = __m["js/ui/cockpit.js"];
 
@@ -3935,65 +4087,88 @@ class View3D {
     for (const c of [this.glc, this.ovc]) { c.width = this.W; c.height = this.H; }
     this.cockpit.resize(this.W, this.H);
   }
-  // 거울 영역 (화면 비율)
-  mirrors() {
-    const W = this.W, H = this.H;
-    return [
-      { id: 'rear', x: 0.37 * W, y: 0.016 * H, w: 0.26 * W, h: 0.13 * H },
-      { id: 'left', x: 0.115 * W, y: 0.5 * H, w: 0.17 * W, h: 0.14 * H },
-      { id: 'right', x: 0.715 * W, y: 0.5 * H, w: 0.17 * W, h: 0.14 * H },
-    ];
-  }
-  hitMirrorPx(x, y) { for (const m of this.mirrors()) if (x >= m.x && x <= m.x + m.w && y >= m.y && y <= m.y + m.h) return m.id; return null; }
-  hitMirror(px, py) { // CSS px → 거울 id
-    const k = this.W / (this.glc.clientWidth || 1);
-    for (const m of this.mirrors()) if (px * k >= m.x && px * k <= m.x + m.w && py * k >= m.y && py * k <= m.y + m.h) return m.id;
-    return null;
-  }
+  // 거울: 3D 실내의 거울 유리를 화면에 투영한 사각형(탭해서 그쪽을 보기용)
+  mirrors() { return this._mirRects || []; }
+  hitMirrorPx(x, y) { for (const m of this.mirrors()) { const p = Math.min(m.w, m.h) * 0.25; if (x >= m.x - p && x <= m.x + m.w + p && y >= m.y - p && y <= m.y + m.h + p) return m.id; } return null; }
+  hitMirror(px, py) { const k = this.W / (this.glc.clientWidth || 1); return this.hitMirrorPx(px * k, py * k); }
+  // 실내 좌표 → 화면 px (실내 패스의 VP 사용). 카메라 뒤면 null
+  projectI(p) { const v = this.ivp; if (!v) return null; const x = p[0], y = p[1], z = p[2]; const cx = v[0] * x + v[4] * y + v[8] * z + v[12], cy = v[1] * x + v[5] * y + v[9] * z + v[13], cw = v[3] * x + v[7] * y + v[11] * z + v[15]; if (cw <= 0.05) return null; return [(cx / cw * 0.5 + 0.5) * this.W, (1 - (cy / cw * 0.5 + 0.5)) * this.H, cw]; }
 
   render(g) {
     const { veh, test } = g; const sc = this.scene; if (!sc) return;
-    const gl = this.g3.gl; const W = this.W, H = this.H;
+    const gl = this.g3.gl; const W = this.W, H = this.H; const g3 = this.g3;
     const car = veh.car; const f = veh.fwd(), r = veh.rgt(), cc = veh.center();
     const eyeH = EYE_H[car.body === 'sedan' ? (car.id === 'hatch' || car.id === 'kei' ? 'hatch' : 'sedan') : car.body] ?? 1.2;
-    const ex = cc[0] + f[0] * 0.3 - r[0] * 0.38, ez = cc[1] + f[1] * 0.3 - r[1] * 0.38;
-    const gh = sc.groundHeight(ex, ez);
+    if (!this.interior) this.interior = new Interior(g3);
+    this.interior.build(car, hex3(g.color || '#2a5db0'), eyeH);
+    // 머리: 목을 축으로 돌아가므로 눈이 호를 그린다 (실내 좌표 hx, hz)
+    const yawL = this.lookYaw, HR = 0.1; const hx = HR * (Math.cos(yawL) - 1), hz = HR * Math.sin(yawL);
+    const ex0 = cc[0] + f[0] * 0.3 - r[0] * 0.38, ez0 = cc[1] + f[1] * 0.3 - r[1] * 0.38;
+    const ex = ex0 + f[0] * hx + r[0] * hz, ez = ez0 + f[1] * hx + r[1] * hz;
+    const gh = sc.groundHeight(ex0, ez0);
     const sl = veh.slopeFn ? veh.slopeFn(veh.x, veh.y) : [0, 0]; const slope = (sl[0] * f[0] + sl[1] * f[1]);
     const ey = gh + eyeH;
     this.eye = [ex, ey, ez];
     // 시선: 머리 돌리기(look) + 오르막/제동 피치
-    const pitch = Math.atan(slope) * 0.9 - clamp(veh.accel, -6, 4) * 0.004 + this.lookPitch;
-    const yaw = veh.heading + this.lookYaw;
+    const carPitch = Math.atan(slope) * 0.9 - clamp(veh.accel, -6, 4) * 0.004;
+    const pitch = carPitch + this.lookPitch;
+    const yaw = veh.heading + yawL;
     const dir = [Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw)];
     sc.buildDynamic({ ...g, cx: cc[0], cz: cc[1] });
-    const g3 = this.g3; g3.time = g.time || 0;
+    g3.time = g.time || 0;
     // 그림자 맵 (카메라 주변)
-    if (g3.shadowEnabled !== false && g3.shadowBegin(ex, gh, ez)) { sc.drawDepth(g3, ex, ez, g3.shadowSpan * 1.6); g3.shadowEnd(); }
+    if (g3.shadowEnabled !== false && g3.shadowBegin(ex0, gh, ez0)) { sc.drawDepth(g3, ex0, ez0, g3.shadowSpan * 1.6); g3.shadowEnd(); }
     if (g3.shadowEnabled === false) g3.shadowOn = false;
-    gl.disable(gl.SCISSOR_TEST); gl.viewport(0, 0, W, H); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const basisOf = (d) => { const l = Math.hypot(d[0], d[1], d[2]); const f = [d[0] / l, d[1] / l, d[2] / l]; let rx = -f[2], rz = f[0]; const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl; return { fwd: f, right: [rx, 0, rz], up: [-rz * f[1], rz * f[0] - rx * f[2], rx * f[1]] }; };
-    const scene = (viewMat, proj, cam, dir, fov, aspect, flip, range) => {
+    const scene = (viewMat, proj, cam, dir, fov, aspect, flip, range, noMir) => {
       g3.drawSky(basisOf(dir), [Math.tan(fov / 2) * aspect, Math.tan(fov / 2)], flip);
-      g3.begin(m4.mul(proj, viewMat), cam);
+      g3.begin(m4.mul(proj, viewMat), cam, { noMir });
       sc.drawMain(g3, cam[0], cam[2], range);
     };
-    // --- 메인 ---
+    // --- 거울 3개를 하나의 렌더 타깃(아틀라스)에 ---
+    if (g3.mirOk) {
+      g3.mirrorBegin();
+      for (const id of ['rear', 'left', 'right']) {
+        const R = MIR[id]; gl.viewport(R.x, R.y, R.w, R.h); gl.scissor(R.x, R.y, R.w, R.h); gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
+        let from, d, fov;
+        if (id === 'rear') { from = [cc[0] - f[0] * 0.2, eyeH + 0.1 + gh, cc[1] - f[1] * 0.2]; d = [-f[0], -0.02, -f[1]]; fov = 0.5; }
+        else { const sd = id === 'left' ? -1 : 1; from = [cc[0] + f[0] * 0.8 + r[0] * sd * 1.0, gh + 1.0, cc[1] + f[1] * 0.8 + r[1] * sd * 1.0]; d = [-f[0] + r[0] * sd * 0.28, -0.03, -f[1] + r[1] * sd * 0.28]; fov = 0.62; }
+        const v = m4.lookDir(from[0], from[1], from[2], d[0], d[1], d[2]); const p = m4.perspective(fov, R.w / R.h, 0.3, 700, -1);
+        scene(v, p, from, d, fov, R.w / R.h, -1, 320, true);
+      }
+      g3.mirrorEnd();
+    }
+    // --- 바깥 풍경 ---
+    gl.disable(gl.SCISSOR_TEST); gl.viewport(0, 0, W, H); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const view = m4.lookDir(ex, ey, ez, dir[0], dir[1], dir[2]);
     const FOV = 1.0; const proj = m4.perspective(FOV, W / H, 0.15, 1200);
-    this.vp = m4.mul(proj, view);
+    this.vp = m4.mul(proj, view); this.FOV = FOV;
     scene(view, proj, this.eye, dir, FOV, W / H, 1, 700);
-    // --- 거울 ---
-    gl.enable(gl.SCISSOR_TEST);
-    for (const m of this.mirrors()) {
-      const y = H - m.y - m.h; gl.viewport(m.x, y, m.w, m.h); gl.scissor(m.x, y, m.w, m.h); gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
-      let from, d, fov;
-      if (m.id === 'rear') { from = [cc[0] - f[0] * 0.2, eyeH + 0.1 + gh, cc[1] - f[1] * 0.2]; d = [-f[0], -0.02, -f[1]]; fov = 0.5; }
-      else { const sd = m.id === 'left' ? -1 : 1; from = [cc[0] + f[0] * 0.8 + r[0] * sd * 1.0, gh + 1.0, cc[1] + f[1] * 0.8 + r[1] * sd * 1.0]; d = [-f[0] + r[0] * sd * 0.28, -0.03, -f[1] + r[1] * sd * 0.28]; fov = 0.62; }
-      const v = m4.lookDir(from[0], from[1], from[2], d[0], d[1], d[2]); const p = m4.perspective(fov, m.w / m.h, 0.3, 700, -1);
-      scene(v, p, from, d, fov, m.w / m.h, -1, 320);
-    }
-    gl.disable(gl.SCISSOR_TEST); gl.viewport(0, 0, W, H);
+    // --- 실내(3D): 같은 머리 회전을 차량 좌표계에서 적용. 깊이만 지우고 위에 그림 ---
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    const pI = this.lookPitch; const dI = [Math.cos(pI) * Math.cos(yawL), Math.sin(pI), Math.cos(pI) * Math.sin(yawL)];
+    const iview = m4.lookDir(hx, 0, hz, dI[0], dI[1], dI[2]); const iproj = m4.perspective(FOV, W / H, 0.04, 30);
+    this.ivp = m4.mul(iproj, iview);
+    const s = g3.sun; const sunCar = [s[0] * f[0] + s[2] * f[1], s[1], s[0] * r[0] + s[2] * r[1]];
+    this.interior.draw(this.ivp, [hx, 0, hz], sunCar, veh, g.time || 0, this.cockpit);
+    this.updateProjected();
     this.drawOverlay(g);
+  }
+
+  // 3D 실내 요소(핸들/레버/버튼/문/미러)의 화면 위치 → 터치 영역
+  updateProjected() {
+    const A = this.interior.anch, DA = this.interior.dynA; if (!A || !DA) return; const H = this.H; const k = H / 2 / Math.tan((this.FOV || 1) / 2);
+    const disc = (p, r) => { const q = this.projectI(p); if (!q) return { x: -1e5, y: -1e5, r: 1 }; return { x: q[0], y: q[1], r: Math.max(r * k / q[2], 0.8 * H / 100) }; };
+    const out = {};
+    { const w = A.wheel; const q = this.projectI(w.c); const pts = []; for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; const p = [w.c[0] + (w.u[0] * Math.cos(a) + w.v[0] * Math.sin(a)) * w.R, w.c[1] + (w.u[1] * Math.cos(a) + w.v[1] * Math.sin(a)) * w.R, w.c[2] + (w.u[2] * Math.cos(a) + w.v[2] * Math.sin(a)) * w.R]; const pp = this.projectI(p); if (pp) pts.push(pp); }
+      if (q && pts.length > 12) { const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]); const rx = (Math.max(...xs) - Math.min(...xs)) / 2, ry = (Math.max(...ys) - Math.min(...ys)) / 2; out.wheel = { cx: (Math.max(...xs) + Math.min(...xs)) / 2, cy: (Math.max(...ys) + Math.min(...ys)) / 2, R: rx, ry }; } else out.wheel = { cx: -1e5, cy: -1e5, R: 1, ry: 1 }; }
+    out.start = disc(A.start.p, A.start.r); out.hazard = disc(A.hazard.p, A.hazard.r); out.dial = disc(A.dial.p, A.dial.r);
+    const st = (S, tip) => { const b = this.projectI(S.pivot), t = this.projectI(tip); return b && t ? { bx: b[0], by: b[1], tx: t[0], ty: t[1] } : { bx: -1e5, by: -1e5, tx: -1e5, ty: -1e5 }; };
+    out.stL = st(A.stL, DA.tipL); out.stR = st(A.stR, DA.tipR);
+    { const q = this.projectI(DA.door); const rr = 0.07 * k / (q ? q[2] : 1); out.door = q ? { x: q[0] - rr, y: q[1] - rr * 0.6, w: rr * 2, h: rr * 1.2 } : { x: -1e5, y: -1e5, w: 1, h: 1 }; }
+    this._mirRects = [];
+    for (const m of DA.mirrors) { const ps = m.corners.map((c) => this.projectI(c)); if (ps.some((p) => !p)) continue; const xs = ps.map((p) => p[0]), ys = ps.map((p) => p[1]); const x = Math.min(...xs), y = Math.min(...ys); this._mirRects.push({ id: m.id, x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }); }
+    this.cockpit.setProjected(out);
   }
 
   project(x, y, z) { const v = this.vp; const cx = v[0] * x + v[4] * y + v[8] * z + v[12], cy = v[1] * x + v[5] * y + v[9] * z + v[13], cw = v[3] * x + v[7] * y + v[11] * z + v[15]; if (cw <= 0.1) return null; return [(cx / cw * 0.5 + 0.5) * this.W, (1 - (cy / cw * 0.5 + 0.5)) * this.H, cw]; }
@@ -4005,21 +4180,7 @@ class View3D {
     // 다른 플레이어 이름표
     c.font = `bold ${2.8 * u}px sans-serif`; c.textAlign = 'center'; c.lineWidth = 0.6 * u; c.strokeStyle = 'rgba(0,0,0,.7)'; c.fillStyle = '#fff';
     for (const p of g.peers || []) { const q = this.project(p.x, 2.2 + this.scene.groundHeight(p.x, p.y), p.y); if (!q || q[2] > 140) continue; c.strokeText(p.name, q[0], q[1]); c.fillText(p.name, q[0], q[1]); }
-    this.cockpit.draw(c, g, (cc) => this.mirrorFrames(cc, u));
-  }
-  mirrorFrames(c, u) {
-    for (const m of this.mirrors()) {
-      const pad = 0.9 * u;
-      // 하우징(그림자 + 본체)
-      c.save(); c.shadowColor = 'rgba(0,0,0,.6)'; c.shadowBlur = 1.5 * u; c.fillStyle = '#0a0b0d'; c.beginPath(); c.roundRect(m.x - pad, m.y - pad, m.w + pad * 2, m.h + pad * 2, 1.6 * u);
-      c.roundRect(m.x, m.y, m.w, m.h, 0.7 * u); c.fill('evenodd'); c.restore();
-      c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = 0.28 * u; c.beginPath(); c.roundRect(m.x - pad, m.y - pad, m.w + pad * 2, m.h + pad * 2, 1.6 * u); c.stroke();
-      // 유리 반사
-      const g = c.createLinearGradient(m.x, m.y, m.x + m.w, m.y + m.h); g.addColorStop(0, 'rgba(255,255,255,.16)'); g.addColorStop(0.35, 'rgba(255,255,255,0)'); c.fillStyle = g; c.beginPath(); c.roundRect(m.x, m.y, m.w, m.h, 0.7 * u); c.fill();
-      if (m.id !== 'rear') { // 사이드미러 지지대
-        const side = m.id === 'left' ? -1 : 1; const bx = side < 0 ? m.x - pad : m.x + m.w + pad; c.fillStyle = '#0a0b0d'; c.beginPath(); c.moveTo(bx, m.y + m.h * 0.55); c.lineTo(bx + side * 5 * u, m.y + m.h + 5 * u); c.lineTo(bx + side * 5 * u + side * -1 * u, m.y + m.h + 5 * u); c.lineTo(bx, m.y + m.h * 0.9); c.fill();
-      } else { c.fillStyle = '#0a0b0d'; c.fillRect(m.x + m.w / 2 - 1 * u, m.y - pad - 2 * u, 2 * u, 2 * u); }
-    }
+    this.cockpit.draw(c, g);
   }
 }
 
@@ -4455,7 +4616,7 @@ const lookState = { target: 0, drag: false, fired: { left: false, right: false, 
 function doLook(side, programmatic) {
   if (!G || !G.running || G.finished) return;
   G.test.look?.(side); hud.toast({ left: '좌측 확인', right: '우측 확인', rear: '후방 확인' }[side], true);
-  if (programmatic) { lookState.target = { left: -1.5, right: 1.5, rear: 3.0 }[side]; lookState.hold = 0.75; lookState.fired[side] = true; }
+  if (programmatic) { lookState.target = { left: -1.15, right: 1.3, rear: 2.55 }[side]; lookState.hold = 0.75; lookState.fired[side] = true; }
 }
 function updateLook(dt) {
   if (!view) return;
@@ -4475,7 +4636,7 @@ function updateLook(dt) {
     fire: (n, a) => ctl.fire(n, a),
     pedal: (n, v) => { ctl.inp.analog[n] = v; },
     lookStart() { lookState.drag = true; lookState.yaw0 = view.lookYaw; },
-    lookMove(dx, dy) { const kk = k(); lookState.target = Math.max(-2.7, Math.min(2.7, lookState.yaw0 + (dx / kk) * 0.011)); lookState.pitch = Math.max(-0.35, Math.min(0.35, -(dy / kk) * 0.004)); },
+    lookMove(dx, dy) { const kk = k(); lookState.target = Math.max(-2.7, Math.min(2.7, lookState.yaw0 + (dx / kk) * 0.011)); lookState.pitch = Math.max(-0.9, Math.min(0.4, -(dy / kk) * 0.006)); },
     lookEnd(moved, x, y) { if (moved < 10 * k()) { const m = view.hitMirrorPx(x, y); if (m) doLook(m, true); } lookState.drag = false; lookState.pitch = 0; },
   };
   const pos = (e) => { const r = el.getBoundingClientRect(), kk = view.W / r.width; return [(e.clientX - r.left) * kk, (e.clientY - r.top) * kk]; };
@@ -4535,7 +4696,7 @@ function frame(now) {
       if (G.multi && now - G.lastSend > 100) { G.lastSend = now; sendState(); }
     }
     updateLook(dt);
-    view.render({ mode: G.o.exam, veh: G.veh, test: G.test, peers: G.multi ? peersForDraw() : [], time: G.time });
+    view.render({ mode: G.o.exam, veh: G.veh, test: G.test, peers: G.multi ? peersForDraw() : [], time: G.time, color: G.myColor });
     if (!G.resultShown) hud.update({ veh: G.veh, test: G.test, pedals: G.pedals });
   } else {
     if (view && !view.cleared) { view.ov.clearRect(0, 0, view.W, view.H); const gl = view.g3.gl; gl.clearColor(0.07, 0.09, 0.13, 1); gl.clear(gl.COLOR_BUFFER_BIT); view.cleared = true; }
@@ -4545,7 +4706,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 net.connect();
 show('s-menu');
-window.__kds = { get view() { return view; }, get G() { return G; }, S, net, ctl, startGame };
+window.__kds = { get view() { return view; }, get G() { return G; }, S, net, ctl, startGame, look(y, p = 0) { lookState.drag = true; lookState.target = y; lookState.pitch = p; } };
 
 return {  };
 })();
