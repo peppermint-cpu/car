@@ -1,0 +1,2083 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="screen-orientation" content="landscape">
+<meta name="theme-color" content="#14181f">
+<title>운전면허 시뮬레이터 3D · 1종/2종 보통</title>
+<style>:root { --bg:#14181f; --card:#1d232d; --line:#2f3846; --fg:#eef1f5; --dim:#9aa6b6; --acc:#3d8bff; --ok:#35c76a; --bad:#ff5a5a; --warn:#ffb020; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.45 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+canvas#gl, canvas#ov { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+canvas#ov { pointer-events: none; }
+body { background: linear-gradient(160deg,#10151f,#1b2433); }
+.hidden { display: none !important; }
+button { font: inherit; color: var(--fg); background: #2a3342; border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; cursor: pointer; }
+button:active, button.on, button.flash { background: var(--acc); }
+button.big { background: var(--acc); border-color: transparent; font-weight: 700; padding: 12px 18px; font-size: 16px; }
+button.big.alt { background: #2e9e63; }
+button.mini { padding: 2px 8px; font-size: 12px; margin-left: 8px; }
+input { font: inherit; color: var(--fg); background: #11151b; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%; user-select: text; -webkit-user-select: text; }
+
+/* ---- 화면 ---- */
+#screens { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+.screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10,13,18,.82); backdrop-filter: blur(3px); pointer-events: auto; overflow: auto; padding: 12px; touch-action: pan-y; }
+.card { width: min(440px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin: auto; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+.card.wide { width: min(760px, 100%); }
+h1 { font-size: 21px; margin: 0 0 4px; } h2 { margin: 0 0 12px; font-size: 19px; } h3 { margin: 14px 0 6px; font-size: 14px; color: var(--dim); }
+.sub, .note { color: var(--dim); font-size: 12.5px; margin: 6px 0; } .code { background:#0e1218; border:1px solid var(--line); border-radius:8px; padding:2px 10px; letter-spacing:4px; font-family: monospace; margin-left: 8px; }
+label { display: block; margin: 12px 0; font-size: 13px; color: var(--dim); } label input { margin-top: 5px; }
+.row { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; } .row > * { flex: 1; } .row.small button { font-size: 13px; padding: 8px 6px; }
+.opt { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; } .opt > span { width: 56px; color: var(--dim); font-size: 13px; } .opt.col { align-items: stretch; flex-direction: column; } .opt.col > span { width: auto; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; } .seg button { border: 0; border-radius: 0; background: #232b37; padding: 8px 12px; font-size: 14px; } .seg button.sel { background: var(--acc); font-weight: 700; }
+#colors { display: flex; gap: 8px; flex-wrap: wrap; } #colors i { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; box-shadow: 0 0 0 1px #0006 inset; } #colors i.sel { border-color: #fff; transform: scale(1.12); }
+#cars { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; max-height: 38vh; overflow: auto; touch-action: pan-y; }
+.car { border: 1px solid var(--line); background: #1a2029; border-radius: 12px; padding: 9px 10px; cursor: pointer; } .car.sel { border-color: var(--acc); background: #1e2a3c; } .car.dis { opacity: .35; pointer-events: none; }
+.car b { display: block; font-size: 14px; } .car small { color: var(--dim); display: block; font-size: 11.5px; } .car .sp { color: #cfd7e3; font-size: 11.5px; margin-top: 3px; }
+.car canvas { width: 100%; height: 44px; display: block; margin-bottom: 4px; }
+.list { display: flex; flex-direction: column; gap: 6px; max-height: 34vh; overflow: auto; touch-action: pan-y; } .list .it { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #1a2029; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13.5px; } .it small { color: var(--dim); } .it .ok { color: var(--ok); } .it .bad { color: var(--bad); } .it.me { border-color: var(--acc); }
+.keys { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; font-size: 13px; } .keys div { display: flex; justify-content: space-between; border-bottom: 1px dashed #2a3340; padding: 3px 0; } .keys kbd { color: #9cc4ff; font-family: monospace; }
+#res-score { font-size: 38px; font-weight: 800; margin: 4px 0 10px; } #res-score.pass { color: var(--ok); } #res-score.fail { color: var(--bad); } #res-score small { font-size: 14px; font-weight: 400; color: var(--dim); display: block; }
+
+/* ---- HUD (가로 화면 기준) ---- */
+#hud { position: fixed; inset: 0; pointer-events: none; font-weight: 600; text-shadow: 0 1px 3px #000a; z-index: 3; }
+#h-gauge { display: none; }
+#h-top { position: absolute; top: max(6px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); display: flex; justify-content: space-between; align-items: flex-start; }
+#h-info { display: flex; gap: 10px; background: #0e1218cc; border-radius: 10px; padding: 3px 10px; } #h-info small { display: block; color: var(--dim); font-size: 9.5px; } #h-info b { font-size: 18px; } #h-score.shake { animation: shake .35s; color: var(--bad); }
+@keyframes shake { 0%,100% { transform: translateX(0);} 25% { transform: translateX(-4px);} 75% { transform: translateX(4px);} }
+#h-objective { position: absolute; top: 16%; left: 50%; transform: translateX(-50%); width: min(62%, 560px); text-align: center; background: #0e1218d0; border-radius: 10px; padding: 4px 10px; font-size: 12.5px; } #h-objective:empty { display: none; }
+#h-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+#h-limit { width: 38px; height: 38px; border-radius: 50%; background: #fff; color: #111; border: 4px solid #d62828; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; text-shadow: none; } #h-limit:empty { display: none; } #h-limit.school { border-color: #e8a300; background: #ffe45a; }
+#h-lane, #h-signal { background: #0e1218cc; border-radius: 8px; padding: 1px 8px; font-size: 11px; } #h-lane:empty, #h-signal:empty { display: none; }
+.lamp { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: -1px; } .lamp.red { background: #ff3030; box-shadow: 0 0 8px #f33; } .lamp.yellow { background: #ffd23a; box-shadow: 0 0 8px #fd3; } .lamp.green { background: #35e06a; box-shadow: 0 0 8px #3e6; } .stopsign { background: #d62828; padding: 0 5px; border-radius: 4px; font-size: 10px; }
+#h-nav { position: absolute; top: 27%; left: 50%; transform: translateX(-50%); font-size: 17px; background: #1f6fdfdd; border-radius: 10px; padding: 2px 14px; } #h-nav:empty { display: none; }
+#h-log { position: absolute; top: 22%; left: max(8px, env(safe-area-inset-left)); font-size: 11px; display: flex; flex-direction: column; gap: 2px; max-width: 26vw; } .log-item { background: #7a1c1ccc; border-radius: 7px; padding: 1px 7px; }
+#h-board { position: absolute; top: 17%; right: calc(max(8px, env(safe-area-inset-right)) + 58px); background: #0e1218cc; border-radius: 8px; padding: 4px 8px; font-size: 10.5px; min-width: 110px; } #h-board:empty { display: none; } #h-board div { display: flex; justify-content: space-between; gap: 8px; } #h-board .me { color: #9cc4ff; }
+#h-toasts { position: absolute; top: 36%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; width: 70%; }
+.toast { background: #8c2121ee; padding: 4px 14px; border-radius: 16px; font-size: 13px; transition: opacity .5s; } .toast.good { background: #1f7a45ee; } .toast.out { opacity: 0; }
+#h-subtitle { position: absolute; left: 50%; top: 24%; transform: translateX(-50%); max-width: 64%; background: #0b0f14ee; border: 1px solid #3d8bff; border-radius: 10px; padding: 5px 12px; font-size: 12.5px; display: none; text-align: center; } #h-subtitle.on { display: block; }
+#countdown { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 30vh; font-weight: 900; color: #fff; text-shadow: 0 4px 20px #000; pointer-events: none; z-index: 6; }
+
+/* ---- 터치 조작 (가로 화면) ---- */
+#touch { position: fixed; inset: 0; z-index: 5; touch-action: none; }
+#touch-layer { position: absolute; inset: 0; touch-action: none; -webkit-user-select: none; user-select: none; }
+#touch .grp { position: absolute; display: flex; gap: 6px; touch-action: none; }
+#touch button { min-width: 54px; min-height: 40px; background: #232a36cc; border: 1px solid #ffffff2e; font-size: 12.5px; padding: 3px 6px; border-radius: 12px; }
+#touch button.on, #touch button.flash, #touch button.act { background: var(--acc); }
+#touch .tl { left: max(6px, env(safe-area-inset-left)); top: 14%; } #touch .menu-btn { min-width: 40px; min-height: 36px; font-size: 18px; }
+#touch .more { left: 50px; top: 14%; display: grid; grid-template-columns: repeat(3, auto); background: #0c1016e8; padding: 8px; border-radius: 14px; border: 1px solid #ffffff22; } #touch .more button { min-height: 36px; }
+#rotate { position: fixed; inset: 0; z-index: 50; background: #0b0f15; display: flex; align-items: center; justify-content: center; text-align: center; } #rotate .ph { font-size: 64px; animation: rot 1.6s infinite; } @keyframes rot { 0%,30% { transform: rotate(0);} 60%,100% { transform: rotate(-90deg);} }
+@media (orientation: portrait) { #rotate { display: flex !important; } }
+@media (orientation: landscape) { #rotate { display: none !important; } }
+.d3 { font-size: 11px; background: var(--acc); border-radius: 6px; padding: 1px 7px; vertical-align: 3px; }
+details.adv { margin: 6px 0; font-size: 12.5px; color: var(--dim); } details.adv input { margin: 6px 0; }
+/* 가로 화면 메뉴 (낮은 높이) */
+@media (orientation: landscape) and (max-height: 520px) {
+  .screen { padding: 6px; align-items: flex-start; } .card { padding: 12px 14px; } .card.wide { width: min(900px, 100%); }
+  h1 { font-size: 18px; } h2 { font-size: 16px; margin-bottom: 8px; } .row { margin: 8px 0; } .opt { margin: 6px 0; } #cars { max-height: 46vh; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .car canvas { height: 30px; } .list { max-height: 40vh; } button.big { padding: 9px 14px; font-size: 15px; } .note { margin: 4px 0; font-size: 11.5px; }
+  #res-score { font-size: 28px; margin: 0 0 6px; }
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas><canvas id="ov"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="h-top">
+    <div id="h-info"><div><small>점수</small><b id="h-score">100</b></div><div><small id="h-phase"></small><b id="h-time">0:00</b></div></div>
+    <div id="h-right"><div id="h-limit"></div><div id="h-lane"></div><div id="h-signal"></div></div>
+  </div>
+  <div id="h-objective"></div>
+  <div id="h-nav"></div>
+  <div id="h-log"></div>
+  <div id="h-board"></div>
+  <div id="h-toasts"></div>
+  <div id="h-subtitle"></div>
+  <div id="h-gauge"><span id="h-speed"></span><i id="h-speed-bar"></i><span id="h-gear"></span><span id="h-rpm"></span><i id="h-rpm-bar"></i><div id="h-pedals"></div><div id="h-flags"></div></div>
+</div>
+
+<div id="touch" class="hidden">
+  <div id="touch-layer"></div>
+  <div class="grp tl"><button class="menu-btn" data-act="menu">☰</button></div>
+  <div id="more" class="grp more hidden">
+    <button data-act="hints">조작 안내</button><button data-act="look:left">좌측확인</button><button data-act="look:rear">후방확인</button>
+    <button data-act="look:right">우측확인</button><button data-act="pause">일시정지</button>
+  </div>
+</div>
+<div id="rotate" class="hidden"><div><div class="ph">📱</div><p>휴대폰을 <b>가로</b>로 돌려주세요</p><small>가로 화면 전용 게임입니다</small></div></div>
+<div id="countdown" class="hidden"></div>
+
+<div id="screens">
+  <section id="s-menu" class="screen">
+    <div class="card">
+      <h1>🚗 운전면허 시뮬레이터 <small class="d3">3D 1인칭</small></h1>
+      <p class="sub">제1종 보통 · 제2종 보통 · 기능시험 / 도로주행시험 · 멀티플레이</p>
+      <label>닉네임 <input id="in-name" maxlength="12" placeholder="닉네임 (최대 12자)" autocomplete="off"></label>
+      <div class="row">
+        <button class="big" id="b-solo">혼자 연습하기</button>
+        <button class="big alt" id="b-multi">멀티플레이</button>
+      </div>
+      <div class="row small">
+        <button id="b-rank">🏆 랭킹</button><button id="b-help">⌨ 조작법</button><button id="b-voice">🔊 시험관 음성: 켬</button>
+      </div>
+      <p class="note" id="net-status">서버 연결 중…</p>
+      <details class="adv"><summary>서버 주소 (멀티플레이/랭킹)</summary><input id="in-server" placeholder="예: my-app.onrender.com" autocomplete="off"><button id="b-server">연결</button></details>
+      <p class="note">※ 연습용입니다. 실제 시험과 무관하며 필기시험은 포함되지 않습니다. 핸들은 화면 아래쪽을 좌우로 드래그, 화면을 드래그하면 고개를 돌려 주변을 확인(거울 탭도 확인으로 인정)합니다.</p>
+    </div>
+  </section>
+
+  <section id="s-setup" class="screen hidden">
+    <div class="card wide">
+      <h2 id="setup-title">시험 설정</h2>
+      <div id="setup-solo">
+        <div class="opt"><span>면허</span><div class="seg" id="seg-license"><button data-v="2">제2종 보통</button><button data-v="1">제1종 보통</button></div></div>
+        <div class="opt"><span>시험</span><div class="seg" id="seg-exam"><button data-v="function">기능시험 (장내)</button><button data-v="road">도로주행시험</button></div></div>
+      </div>
+      <div class="opt"><span>변속기</span><div class="seg" id="seg-trans"><button data-v="AT">자동 (AT)</button><button data-v="MT">수동 (MT)</button></div></div>
+      <div class="opt"><span>색상</span><div id="colors"></div></div>
+      <div class="opt col"><span>차량 선택 <small id="car-note"></small></span><div id="cars"></div></div>
+      <div class="row"><button class="big" id="b-setup-ok">시작</button><button id="b-setup-back">뒤로</button></div>
+      <p class="note" id="exam-brief"></p>
+    </div>
+  </section>
+
+  <section id="s-lobby-list" class="screen hidden">
+    <div class="card">
+      <h2>멀티플레이</h2>
+      <div class="row"><button class="big" id="b-create">방 만들기</button></div>
+      <div class="row"><input id="in-code" maxlength="4" placeholder="방 코드 4자리" autocomplete="off"><button id="b-join">참가</button></div>
+      <h3>열려 있는 방 <button id="b-refresh" class="mini">새로고침</button></h3>
+      <div id="room-list" class="list"></div>
+      <div class="row"><button id="b-ll-back">뒤로</button></div>
+      <p class="note" id="ll-msg"></p>
+    </div>
+  </section>
+
+  <section id="s-lobby" class="screen hidden">
+    <div class="card wide">
+      <h2>대기실 <span id="lobby-code" class="code"></span></h2>
+      <p class="note">친구에게 방 코드를 알려주세요. 같은 시드의 시험을 동시에 치르고, 다른 사람 차량은 반투명으로 보입니다.</p>
+      <div id="lobby-cfg" class="opt"><span>설정</span><div class="seg" id="lseg-license"><button data-v="2">2종 보통</button><button data-v="1">1종 보통</button></div><div class="seg" id="lseg-exam"><button data-v="function">기능시험</button><button data-v="road">도로주행</button></div></div>
+      <div id="lobby-players" class="list"></div>
+      <div class="row"><button id="b-lobby-car">🚘 내 차량 변경</button><button class="big alt" id="b-ready">준비</button><button class="big" id="b-start">시작</button><button id="b-lobby-leave">나가기</button></div>
+      <p class="note" id="lobby-msg"></p>
+    </div>
+  </section>
+
+  <section id="s-result" class="screen hidden">
+    <div class="card wide">
+      <h2 id="res-title"></h2>
+      <div id="res-score"></div>
+      <div id="res-ded" class="list"></div>
+      <div id="res-rank" class="list"></div>
+      <div class="row"><button class="big" id="b-res-again">다시 하기</button><button id="b-res-menu">메인 메뉴</button></div>
+    </div>
+  </section>
+
+  <section id="s-rank" class="screen hidden">
+    <div class="card wide">
+      <h2>🏆 랭킹 <small id="rank-db"></small></h2>
+      <div class="opt"><div class="seg" id="rseg-license"><button data-v="2">2종 보통</button><button data-v="1">1종 보통</button></div><div class="seg" id="rseg-exam"><button data-v="function">기능시험</button><button data-v="road">도로주행</button></div></div>
+      <div id="rank-list" class="list"></div>
+      <div class="row"><button id="b-rank-back">뒤로</button></div>
+    </div>
+  </section>
+
+  <section id="s-help" class="screen hidden">
+    <div class="card wide">
+      <h2>조작법</h2>
+      <div id="help-keys" class="keys"></div>
+      <p class="note">기능시험: 시동 → 시험관 지시에 따른 기본조작 → 경사로 → T자 주차 → 돌발상황 → 신호교차로 → 가속코스 순서입니다. 100점 만점, 80점 이상 합격.</p>
+      <p class="note">도로주행: 70점 이상 합격. 출발 전 문·안전띠·좌/우/후방 확인(J K L) 후 시동, 시험관의 경로 안내를 따르세요.</p>
+      <p class="note">모바일은 가로 화면을 권장합니다. 화면의 버튼으로 모든 조작이 가능합니다.</p>
+      <div class="row"><button id="b-help-back">닫기</button></div>
+    </div>
+  </section>
+
+  <section id="s-pause" class="screen hidden">
+    <div class="card"><h2>일시정지</h2><div class="row"><button class="big" id="b-resume">계속하기</button><button id="b-quit">시험 포기하고 나가기</button></div><p class="note" id="pause-note"></p></div>
+  </section>
+</div>
+<script type="module">"use strict";
+const __m = {};
+
+// ===== js/sim/vehicle.js =====
+__m["js/sim/vehicle.js"] = (() => {
+// 차량 물리 모델 (자동/수동 변속기, 클러치, 엔진 시동 꺼짐, 경사로, 주차브레이크)
+// 좌표계: x = 동쪽(+), y = 남쪽(+, 화면 아래), heading 0 = 동쪽, 시계방향이 +
+// 기준점은 뒷차축 중심.
+
+const G = 9.81;
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const sign = (v) => (v > 0 ? 1 : v < 0 ? -1 : 0);
+const KMH = 3.6;
+
+const AT_GEARS = ['P', 'R', 'N', 'D'];
+const MT_GEARS = ['R', 'N', 1, 2, 3, 4, 5];
+
+const IDLE_RPM = 850;
+const STALL_RPM = 420;
+const REDLINE = 6500;
+
+class Vehicle {
+  constructor(car, trans = 'AT') {
+    this.car = car;
+    this.trans = trans;
+    this.wheelR = car.mass > 5000 ? 0.45 : 0.31;
+    this.frontOH = car.length - car.wheelbase - car.rearOH;
+    this.track = car.width - 0.22;
+    this.cdA = car.body === 'truck' ? 2.4 : car.body === 'van' ? 1.2 : car.body === 'suv' ? 0.85 : 0.68;
+    this.reset(0, 0, 0);
+  }
+
+  reset(x, y, heading) {
+    this.x = x; this.y = y; this.heading = heading;
+    this.v = 0;                // 진행 방향 부호 있는 속도 (m/s)
+    this.accel = 0;            // 종방향 가속도 (m/s²)
+    this.steerAngle = 0;
+    this.engineOn = false;
+    this.rpm = 0;
+    this._e = 0;               // MT 엔진 회전수
+    this.gear = this.trans === 'AT' ? 'P' : 'N';
+    this.throttle = 0; this.brakePedal = 0; this.clutchPedal = 0;
+    this.handbrake = true;
+    this.left = false; this.right = false; this.hazard = false;
+    this.headlight = 0;        // 0 끔 / 1 하향 / 2 상향
+    this.wiper = 0;            // 0~3
+    this.doorClosed = false;
+    this.belt = false;
+    this.odo = 0;
+    this.turnAccum = 0;        // 방향지시등 켠 뒤 누적 회전각 (자동 해제용)
+    this.ev = [];
+    this._jerkCd = 0; this._revCd = 0; this._stallT = 0;
+    this.brakeLight = false;
+    this.slopeFn = null;
+  }
+
+  // ---------- 기하 ----------
+  fwd() { return [Math.cos(this.heading), Math.sin(this.heading)]; }
+  rgt() { return [-Math.sin(this.heading), Math.cos(this.heading)]; }
+  // 차체 중심
+  center() {
+    const f = this.fwd();
+    const off = (this.car.wheelbase + this.frontOH - this.car.rearOH) / 2;
+    return [this.x + f[0] * off, this.y + f[1] * off];
+  }
+  front() { const f = this.fwd(); const d = this.car.wheelbase + this.frontOH; return [this.x + f[0] * d, this.y + f[1] * d]; }
+  frontAxle() { const f = this.fwd(); const d = this.car.wheelbase; return [this.x + f[0] * d, this.y + f[1] * d]; }
+  // 차체 네 모서리: 앞왼, 앞오른, 뒤오른, 뒤왼
+  corners() {
+    const f = this.fwd(), r = this.rgt(), hw = this.car.width / 2;
+    const fx = this.x + f[0] * (this.car.wheelbase + this.frontOH), fy = this.y + f[1] * (this.car.wheelbase + this.frontOH);
+    const bx = this.x - f[0] * this.car.rearOH, by = this.y - f[1] * this.car.rearOH;
+    return [
+      [fx - r[0] * hw, fy - r[1] * hw], [fx + r[0] * hw, fy + r[1] * hw],
+      [bx + r[0] * hw, by + r[1] * hw], [bx - r[0] * hw, by - r[1] * hw],
+    ];
+  }
+  // 바퀴 바깥쪽 모서리 4점: 앞왼, 앞오른, 뒤왼, 뒤오른
+  wheelPoints() {
+    const f = this.fwd(), r = this.rgt();
+    const hw = this.track / 2 + 0.11;
+    const fx = this.x + f[0] * this.car.wheelbase, fy = this.y + f[1] * this.car.wheelbase;
+    return [
+      [fx - r[0] * hw, fy - r[1] * hw], [fx + r[0] * hw, fy + r[1] * hw],
+      [this.x - r[0] * hw, this.y - r[1] * hw], [this.x + r[0] * hw, this.y + r[1] * hw],
+    ];
+  }
+  // 바퀴 중심 (뒷바퀴 좌/우)
+  rearWheels() {
+    const r = this.rgt(), hw = this.track / 2;
+    return [[this.x - r[0] * hw, this.y - r[1] * hw], [this.x + r[0] * hw, this.y + r[1] * hw]];
+  }
+  get speed() { return Math.abs(this.v); }
+  get kmh() { return Math.abs(this.v) * KMH; }
+  popEvents() { const e = this.ev; this.ev = []; return e; }
+  emit(type, data = {}) { this.ev.push({ type, ...data }); }
+
+  // ---------- 운전석 조작 ----------
+  setDoor(closed) { this.doorClosed = closed; }
+  toggleDoor() { this.doorClosed = !this.doorClosed; this.emit('door', { closed: this.doorClosed }); }
+  toggleBelt() { this.belt = !this.belt; this.emit('belt', { on: this.belt }); }
+  toggleHandbrake() { this.handbrake = !this.handbrake; this.emit('handbrake', { on: this.handbrake }); }
+  setHandbrake(on) { if (this.handbrake !== on) { this.handbrake = on; this.emit('handbrake', { on }); } }
+  setSignal(side) { // 'left' | 'right' | 'off'
+    const prev = this.left ? 'left' : this.right ? 'right' : 'off';
+    if (side === prev) side = 'off';
+    this.left = side === 'left'; this.right = side === 'right';
+    this.turnAccum = 0;
+    this.emit('signal', { side, prev });
+  }
+  toggleHazard() { this.hazard = !this.hazard; this.emit('hazard', { on: this.hazard }); }
+  cycleHeadlight() { this.headlight = (this.headlight + 1) % 3; this.emit('headlight', { level: this.headlight }); }
+  setHeadlight(l) { if (this.headlight !== l) { this.headlight = l; this.emit('headlight', { level: l }); } }
+  cycleWiper() { this.wiper = (this.wiper + 1) % 4; this.emit('wiper', { level: this.wiper }); }
+  setWiper(l) { this.wiper = clamp(l, 0, 3); this.emit('wiper', { level: this.wiper }); }
+
+  gearList() { return this.trans === 'AT' ? AT_GEARS : MT_GEARS; }
+  gearLabel() { return String(this.gear); }
+  shift(dir) {
+    const list = this.gearList();
+    const i = list.indexOf(this.gear);
+    const n = clamp(i + dir, 0, list.length - 1);
+    if (n !== i) this.setGear(list[n]);
+  }
+  setGear(g) {
+    if (g === this.gear) return true;
+    if (this.trans === 'AT') {
+      if (g === 'P' && this.speed > 0.6) { this.emit('gearBlocked', { reason: '주행 중에는 P로 변속할 수 없습니다' }); return false; }
+      if (this.gear === 'P' && g !== 'P' && this.brakePedal < 0.3) { this.emit('gearBlocked', { reason: '브레이크를 밟고 변속하세요' }); return false; }
+      if ((g === 'R' && this.v > 1.3) || (g === 'D' && this.v < -1.3)) { this.emit('gearBlocked', { reason: '정지 후 변속하세요' }); return false; }
+    } else {
+      if (g !== 'N') {
+        if (this.clutchPedal < 0.7) { this.emit('grind', { to: g }); return false; }
+        if (g === 'R' && this.speed > 0.8) { this.emit('grind', { to: g }); return false; }
+      }
+    }
+    const from = this.gear;
+    this.gear = g;
+    this.emit('gear', { from, to: g });
+    return true;
+  }
+
+  startEngine() {
+    if (this.engineOn) { this.emit('startWhileRunning'); return false; }
+    if (this.trans === 'AT') {
+      if (!((this.gear === 'P' || this.gear === 'N') && this.brakePedal > 0.3)) {
+        this.emit('startFail', { reason: '브레이크를 밟고 기어를 P 또는 N에 두세요' }); return false;
+      }
+    } else if (this.clutchPedal < 0.8) {
+      this.emit('startFail', { reason: '클러치를 끝까지 밟고 시동을 거세요' }); return false;
+    }
+    this.engineOn = true; this._e = IDLE_RPM; this.rpm = IDLE_RPM;
+    this.emit('engineStart');
+    return true;
+  }
+  stopEngine() {
+    if (!this.engineOn) return;
+    this.engineOn = false; this.rpm = 0; this._e = 0;
+    this.emit('engineStop', { manual: true });
+  }
+
+  // ---------- 물리 ----------
+  _torqueCurve(e) {
+    const x = e / 6000;
+    return clamp((0.62 + 1.2 * x - 1.1 * x * x) / 0.95, 0.55, 1.05);
+  }
+  _clutchK(p) {
+    const t = clamp((0.65 - p) / 0.5, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+  _accelCapForce() {
+    const c = this.car;
+    const f0 = (c.nm * c.gears[0] * c.final / this.wheelR) * 0.9 * 0.55;
+    return Math.min(f0, 0.36 * c.mass * G);
+  }
+
+  update(dt, inp) {
+    const c = this.car, m = c.mass;
+    this.throttle = clamp(inp.throttle || 0, 0, 1);
+    this.brakePedal = clamp(inp.brake || 0, 0, 1);
+    this.clutchPedal = this.trans === 'MT' ? clamp(inp.clutch || 0, 0, 1) : 0;
+    this._jerkCd = Math.max(0, this._jerkCd - dt);
+    this._revCd = Math.max(0, this._revCd - dt);
+
+    // --- 조향 ---
+    const maxS = c.maxSteer * Math.PI / 180;
+    const lim = maxS / (1 + 0.9 * Math.pow(Math.abs(this.v) / 9, 2));
+    const target = clamp(inp.steer || 0, -1, 1) * lim;
+    const rate = (maxS / 0.9) * dt;
+    this.steerAngle += clamp(target - this.steerAngle, -rate, rate);
+
+    // --- 구동력 ---
+    let Fdrive = 0;
+    const meff = m * 1.07;
+    const vAbs = Math.abs(this.v);
+    let Ttrans = 0, Fres = 0;
+
+    if (this.trans === 'AT') {
+      Fdrive = this._atDrive(vAbs);
+      // 가상 변속단 기반 rpm 표시
+      if (this.engineOn) {
+        const kmh = vAbs * KMH;
+        const th = [0, 18, 35, 55, 80, 200];
+        let gi = 0; while (gi < 4 && kmh > th[gi + 1]) gi++;
+        const prog = (kmh - th[gi]) / (th[gi + 1] - th[gi]);
+        const target = IDLE_RPM + prog * 2000 + this.throttle * 1100 * (this.gear === 'D' || this.gear === 'R' ? 1 : 3.2);
+        this.rpm += (clamp(target, IDLE_RPM, 6200) - this.rpm) * Math.min(1, 6 * dt);
+      } else this.rpm = 0;
+    } else {
+      Fdrive = this._mtDrive(dt, vAbs);
+    }
+
+    // --- 저항 ---
+    const slope = this.slopeFn ? this.slopeFn(this.x, this.y) : [0, 0];
+    const Fslope = -m * G * (slope[0] * Math.cos(this.heading) + slope[1] * Math.sin(this.heading));
+    const Fdrag = -0.5 * 1.2 * this.cdA * this.v * vAbs;
+    const F = Fdrive + Fslope + Fdrag;
+
+    Fres += 0.012 * m * G;                       // 구름저항
+    Fres += this.brakePedal * 0.95 * m * G;      // 풋브레이크
+    if (this.handbrake) Fres += 0.12 * m * G;    // 주차브레이크(약간 움직일 수는 있음)
+    if (this.trans === 'AT' && this.gear === 'P') Fres += 0.7 * m * G; // 파킹 폴
+    this.brakeLight = this.brakePedal > 0.05;
+
+    const prevV = this.v;
+    if (vAbs < 0.03) {
+      if (Math.abs(F) <= Fres) this.v = 0;
+      else this.v += ((F - sign(F) * Fres) / meff) * dt;
+    } else {
+      let vn = this.v + ((F - sign(this.v) * Fres) / meff) * dt;
+      if (sign(vn) !== sign(this.v) && Math.abs(F) <= Fres) vn = 0;
+      this.v = vn;
+    }
+    this.accel = (this.v - prevV) / dt;
+    // 시동 꺼진 상태에서 기어가 물려 있으면 엔진 브레이크처럼 감속
+    if (!this.engineOn && this.trans === 'MT' && typeof this.gear === 'number' && this._clutchK(this.clutchPedal) > 0.5 && vAbs > 0.05) {
+      this.v -= sign(this.v) * Math.min(vAbs, 0.3 * G * dt * 3);
+    }
+    // 최고속도 제한
+    const vmax = c.topKmh / KMH;
+    this.v = clamp(this.v, -9, vmax);
+
+    // --- 위치 갱신 (자전거 모델, 기준점 = 뒷차축) ---
+    const dth = (this.v / c.wheelbase) * Math.tan(this.steerAngle) * dt;
+    this.heading += dth;
+    this.x += this.v * Math.cos(this.heading) * dt;
+    this.y += this.v * Math.sin(this.heading) * dt;
+    this.odo += Math.abs(this.v) * dt;
+
+    // 방향지시등 자동 해제 (회전 완료 후 핸들 복귀 시)
+    if (this.left || this.right) {
+      this.turnAccum += dth;
+      const want = this.left ? -1 : 1;
+      if (this.turnAccum * want > 1.05 && Math.abs(this.steerAngle) < 0.07) {
+        this.left = false; this.right = false; this.turnAccum = 0;
+        this.emit('signalAuto');
+      }
+    }
+    if (this.heading > TAU * 4 || this.heading < -TAU * 4) this.heading = this.heading % TAU;
+  }
+
+  _atDrive(vAbs) {
+    const m = this.car.mass;
+    if (!this.engineOn) return 0;
+    const dir = this.gear === 'D' ? 1 : this.gear === 'R' ? -1 : 0;
+    if (dir === 0) return 0;
+    const a0 = Math.min(0.36 * G, this._accelCapForce() / m);
+    const P = this.car.kw * 1000 * 0.85;
+    const fmax = Math.min(a0 * m, P / Math.max(vAbs, 1.2));
+    let F = this.throttle * fmax;
+    // 크리핑: 가속 페달을 밟지 않아도 서서히 움직임 (최대 약 6.5km/h)
+    const creepV = 1.8;
+    const vAlong = this.v * dir;
+    if (this.brakePedal < 0.15) F = Math.max(F, m * 0.5 * clamp(1 - vAlong / creepV, 0, 1) * (1 - this.brakePedal / 0.15));
+    // 엔진 브레이크
+    if (this.throttle < 0.05 && vAlong > creepV) F -= m * 0.5 * Math.min(1, (vAlong - creepV) / 4);
+    return F * dir;
+  }
+
+  _mtDrive(dt, vAbs) {
+    const c = this.car, m = c.mass;
+    const gearNum = typeof this.gear === 'number' ? this.gear : 0;
+    let ratio = gearNum ? c.gears[gearNum - 1] : this.gear === 'R' ? 3.5 : 0;
+    const dirSign = this.gear === 'R' ? -1 : 1;
+    const totalRatio = ratio * c.final;
+    const k = this._clutchK(this.clutchPedal);
+    const Ie = c.mass > 5000 ? 0.9 : 0.28;
+    let e = this._e;
+
+    if (!this.engineOn) { this._e = 0; this.rpm = 0; return 0; }
+
+    // 엔진 토크
+    const curve = this._torqueCurve(e);
+    const idleGov = e < IDLE_RPM + 150 ? clamp((IDLE_RPM - e) / IDLE_RPM * 3, 0, 0.5) : 0;
+    let Te = c.nm * curve * clamp(this.throttle * 0.97 + 0.045 + idleGov, 0, 1);
+    if (e > REDLINE) Te = 0;
+    const Tf = c.nm * (0.12 + 0.00003 * e) * (1 - this.throttle * 0.9);
+    const Tnet = Te - Tf;
+
+    // 바퀴 회전수 환산 엔진 rpm (부호 있음: 기어 방향과 차가 반대로 움직이면 음수)
+    const wheelRpmEq = totalRatio ? (this.v * dirSign) * totalRatio * 60 / (TAU * this.wheelR) : 0;
+    const Tcap = c.nm * 1.8;
+    let Ttrans = 0;
+
+    if (!totalRatio || k < 0.02) {
+      // 공회전 / 중립 / 클러치 밟음: 엔진이 자유롭게 회전
+      e += (9.55 * Tnet / Ie) * dt;
+      if (e < IDLE_RPM - 120 && this.throttle < 0.1) e += (IDLE_RPM - e) * Math.min(1, 6 * dt);
+    } else {
+      const slip = e - wheelRpmEq;
+      if (k > 0.92 && Math.abs(slip) < 300) {
+        // 클러치 완전 연결: 엔진 회전은 바퀴를 따름
+        e = Math.max(wheelRpmEq, 0);
+        Ttrans = Tnet;
+      } else {
+        const s = clamp(slip / 120, -1, 1);
+        Ttrans = Tcap * k * k * k * s;
+        e += (9.55 * (Tnet - Ttrans) / Ie) * dt;
+        // 급격한 클러치 연결 → 심한 진동
+        if (Math.abs(Ttrans) > Tcap * 0.62 && Math.abs(slip) > 900 && this._jerkCd === 0 && vAbs > 0.3) {
+          this._jerkCd = 1.5; this.emit('jerk');
+        }
+      }
+      if (wheelRpmEq < 0 && e < 1) e = 0; // 반대 방향으로 굴러가는 중
+    }
+    e = clamp(e, 0, 7200);
+
+    // 시동 꺼짐
+    if (e < STALL_RPM && this.engineOn) {
+      this._stallT += dt;
+      if (this._stallT > 0.12 || e < 150) {
+        this.engineOn = false; this._e = 0; this.rpm = 0; this._stallT = 0;
+        this.emit('stall');
+        return 0;
+      }
+    } else this._stallT = 0;
+
+    // 4천 RPM 이상 회전
+    if (e >= 4000 && this._revCd === 0) { this._revCd = 1.2; this.emit('overRev', { rpm: Math.round(e) }); }
+
+    this._e = e; this.rpm = e;
+    if (!totalRatio || k < 0.02) return 0;
+    let F = (Ttrans * totalRatio * 0.9 / this.wheelR) * dirSign;
+    const cap = 0.38 * m * G;
+    F = clamp(F, -cap, cap);
+    return F;
+  }
+}
+
+// 입력(키보드/터치) → 페달/핸들 값 부드럽게 변환
+class DriverInput {
+  constructor() {
+    this.keys = {};
+    this.steerRaw = 0; this.steer = 0;
+    this.throttle = 0; this.brake = 0; this.clutch = 0;
+    this.halfClutch = false;
+    this.maxThrottle = 1;
+    this.steerOverride = null; // 터치 핸들(-1~1). null 이면 키 입력 사용
+    this.analog = { throttle: null, brake: null, clutch: null }; // 터치 페달 깊이(0~1). null 이면 키 입력
+  }
+  setHeld(name, on) { this.keys[name] = on; }
+  update(dt) {
+    const k = this.keys;
+    const steerTarget = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+    if (this.steerOverride != null) { this.steer += clamp(this.steerOverride - this.steer, -9 * dt, 9 * dt); } else {
+    // 핸들: 누르면 서서히 돌아가고, 놓으면 중앙으로 복귀
+    const sRate = steerTarget === 0 ? 3.2 : 2.3;
+    this.steer += clamp(steerTarget - this.steer, -sRate * dt, sRate * dt); }
+    // 가속 페달
+    const an = this.analog;
+    const thTarget = an.throttle != null ? an.throttle * this.maxThrottle : k.throttle ? this.maxThrottle : 0;
+    this.throttle += clamp(thTarget - this.throttle, -4 * dt, (an.throttle != null ? 3.2 : 1.8) * dt);
+    // 브레이크
+    const brTarget = an.brake != null ? an.brake : k.brake ? 1 : 0;
+    this.brake += clamp(brTarget - this.brake, -5 * dt, (an.brake != null ? 5 : 3.2) * dt);
+    // 클러치: 밟을 땐 빠르게, 뗄 땐 천천히 (반클러치 키로 중간 지점 유지)
+    let clTarget = k.clutch ? 1 : 0;
+    if (!k.clutch && this.halfClutch) clTarget = 0.4;
+    if (an.clutch != null) this.clutch += clamp(an.clutch - this.clutch, -5 * dt, 8 * dt); // 터치: 손가락 위치대로 (천천히 떼면 반클러치)
+    else if (k.clutch) this.clutch += clamp(clTarget - this.clutch, -8 * dt, 5 * dt);
+    else this.clutch += clamp(clTarget - this.clutch, -0.6 * dt, 5 * dt);
+    return { steer: this.steer, throttle: this.throttle, brake: this.brake, clutch: this.clutch };
+  }
+}
+
+return { clamp, KMH, AT_GEARS, MT_GEARS, Vehicle, DriverInput };
+})();
+
+// ===== js/shared/rules.js =====
+__m["js/shared/rules.js"] = (() => {
+// =============================================================
+//  대한민국 운전면허 시험 채점 규정 (제1종 보통 · 제2종 보통)
+//  근거: 도로교통법 시행규칙 [별표 23] 기능시험코스, [별표 24] 기능시험 채점기준,
+//        [별표 26] 도로주행시험 채점기준 (개정 2026. 2. 24. 기준 조사 내용)
+//
+//  "verified: false" 인 항목은 법령 원문 전체를 직접 열람하지 못하고
+//  학원/시험장 공개 자료로 교차 확인한 값입니다. README의 '규정 확인 상태' 참고.
+// =============================================================
+
+const LICENSES = {
+  '1': { id: '1', name: '제1종 보통', short: '1종 보통', transmissions: ['AT', 'MT'] },
+  '2': { id: '2', name: '제2종 보통', short: '2종 보통', transmissions: ['AT', 'MT'] },
+};
+
+const TRANSMISSION_NAME = { AT: '자동변속기(오토)', MT: '수동변속기(스틱)' };
+
+// ------------------------------ 기능시험 ------------------------------
+const FUNCTION_PASS = 80; // 100점 만점에 80점 이상 합격
+const FUNCTION_TIME_LIMIT_SEC = 300; // 출발 지시 후 5분 이내 종료지점 통과
+const FUNCTION_START_TIMEOUT_SEC = 30; // 출발선에서 30초 이내 출발
+const FUNCTION_PARK_TIME_SEC = 120; // 직각주차 지정시간(이후 120초 초과마다 10점 추가)
+const FUNCTION_SPEED_LIMIT_KMH = 20;
+
+const FUNCTION_ITEMS = {
+  // ----- 기본조작 (4개 중 2개 무작위 시행) -----
+  gear:        { group: '기본조작', name: '기어변속',             points: 5,  verified: true },
+  headlight:   { group: '기본조작', name: '전조등 조작',           points: 5,  verified: true },
+  turnSignal:  { group: '기본조작', name: '방향지시등 조작',       points: 5,  verified: true },
+  wiper:       { group: '기본조작', name: '앞유리창닦이기(와이퍼) 조작', points: 5, verified: true },
+  // ----- 기본주행 -----
+  lane:        { group: '기본주행', name: '차로 준수',             points: 15, verified: true },
+  incident:    { group: '기본주행', name: '돌발상황에서 급정지',   points: 10, verified: true },
+  slope:       { group: '기본주행', name: '경사로에서의 정지 및 출발', points: 10, verified: true },
+  turnSignal2: { group: '기본주행', name: '좌·우회전 방향지시등',   points: 5,  verified: false },
+  accel:       { group: '기본주행', name: '가속코스',             points: 10, verified: true },
+  signalX:     { group: '기본주행', name: '신호교차로(20초 이상 정차)', points: 5, verified: true },
+  parkLine:    { group: '기본주행', name: '직각주차(검지선 접촉)', points: 10, verified: true },
+  parkBrake:   { group: '기본주행', name: '직각주차(주차브레이크 미작동)', points: 10, verified: true },
+  parkTime:    { group: '기본주행', name: '직각주차(지정시간 120초 초과)', points: 10, verified: true },
+  startSignal: { group: '기본주행', name: '출발 시 방향지시등', points: 5, verified: true },
+  endSignal:   { group: '기본주행', name: '종료 시 방향지시등', points: 5, verified: true },
+  engine:      { group: '기본주행', name: '시동상태 유지(엔진 정지)', points: 5, verified: true },
+  overRev:     { group: '기본주행', name: '시동상태 유지(4천RPM 이상 회전)', points: 5, verified: true },
+  speed:       { group: '기본주행', name: '주행속도 유지(20km/h 초과)', points: 5, verified: false },
+};
+
+const FUNCTION_DQ = {
+  noBelt:        '시험 시작부터 종료까지 좌석안전띠를 착용하지 않음',
+  curb:          '차의 바퀴가 연석에 접촉함',
+  accident:      '시험 중 안전사고를 일으킴',
+  disobey:       '시험관의 지시 및 통제에 따르지 않음',
+  startFail:     '엔진 시동 지시 3회에도 시동을 걸지 못함',
+  moveFail:      '출발 지시 3회에도 출발하지 못함',
+  parkBrakeOn:   '주차브레이크를 채운 상태로 출발함',
+  timeout:       '출발 지시 후 5분 이내에 종료지점을 통과하지 못함',
+  startTimeout:  '출발선에서 30초 이내에 출발하지 못함',
+  courseSkip:    '시험 코스를 시도하지 않았거나 제대로 이행하지 않음',
+  slopeNoStop:   '경사로에서 정지하지 않고 통과함',
+  slopeSlide:    '경사로 정지구간에서 후방으로 1미터 이상 밀림',
+  slopeTimeout:  '경사로 정지구간 이행 후 30초 내에 통과하지 못함',
+  signalViolate: '신호교차로에서 신호를 위반하거나 앞 범퍼가 정지선을 넘음',
+  noConfirm:     '직각주차 확인선을 접촉하지 않고 출발함',
+  noGearShift:   '가속코스에서 기어변속을 하지 않음',
+};
+
+// ------------------------------ 도로주행시험 ------------------------------
+const ROAD_PASS = 70; // 100점 만점에 70점 이상 합격
+
+// [별표 26] 감점 항목 46개 (code → 구분, 항목명, 감점)
+const ROAD_ITEMS = {
+  doorOpen:        { group: '출발 전 준비', name: '차문 닫힘 미확인', points: 5 },
+  safetyCheck:     { group: '출발 전 준비', name: '승차 전후 주변 안전 미확인', points: 7 },
+  parkBrakeOn:     { group: '출발 전 준비', name: '출발 시 주차브레이크 미해제', points: 10 },
+  noNeutral:       { group: '운전자세', name: '10초 이상 정차 시 기어 미중립', points: 5 },
+  slowStart:       { group: '출발', name: '20초 이내 미출발', points: 10 },
+  restartFail:     { group: '출발', name: '10초 내 재시동 실패', points: 7 },
+  blockTraffic:    { group: '출발', name: '기기 조작 미숙으로 교통 방해', points: 7 },
+  stall:           { group: '출발', name: '기기 조작 미숙으로 엔진 정지', points: 7 },
+  roughStart:      { group: '출발', name: '과도한 공회전 또는 급출발', points: 7 },
+  vibration:       { group: '출발', name: '조작 미숙으로 심한 진동', points: 5 },
+  noSignalStart:   { group: '신호', name: '정차 후 출발 시 방향지시등 미점등', points: 5 },
+  signalStopEarly: { group: '신호', name: '차로 진입 전 방향지시등 소등', points: 5 },
+  signalKeep:      { group: '신호', name: '차로변경 완료 후에도 방향지시등 유지', points: 5 },
+  restartRunning:  { group: '신호', name: '시동 중 시동장치 재조작', points: 5 },
+  tooSlow:         { group: '가속·속도 유지', name: '교통상황보다 현저히 저속 주행', points: 5 },
+  speedUnstable:   { group: '가속·속도 유지', name: '통상속도 유지 불능 또는 가속·제동 반복', points: 5 },
+  wrongGear:       { group: '가속·속도 유지', name: '속도에 맞는 기어변속 미실시', points: 5 },
+  engineBrake:     { group: '제동·정지', name: '엔진브레이크 사용 미숙', points: 5 },
+  brakeReady:      { group: '제동·정지', name: '제동 준비(발 위치) 미흡', points: 5 },
+  noBrakeStop:     { group: '제동·정지', name: '일시정지 중 브레이크 미사용', points: 5 },
+  hardBrake:       { group: '제동·정지', name: '불필요한 급제동', points: 7 },
+  steering:        { group: '조향', name: '핸들 조작 미숙 또는 불량', points: 7 },
+  rightCheck:      { group: '차체 감각', name: '우회전 전 우측 안전 미확인', points: 7 },
+  sideGap:         { group: '차체 감각', name: '장애물과 옆 간격 1m 미만', points: 7 },
+  designatedLane:  { group: '통행 구분', name: '지정차로 준수 위반', points: 7 },
+  overtake:        { group: '통행 구분', name: '앞지르기 방법 등 위반', points: 7 },
+  cutIn:           { group: '통행 구분', name: '끼어들기 금지 위반', points: 7 },
+  laneKeep:        { group: '통행 구분', name: '차로 유지 미숙', points: 5 },
+  lcNoCheck:       { group: '진로변경', name: '진로변경 시 안전 미확인', points: 10 },
+  lcNoSignal:      { group: '진로변경', name: '진로변경 시 신호 미이행', points: 7 },
+  lcLateSignal:    { group: '진로변경', name: '진로변경 30m 전 신호 미실시', points: 7 },
+  lcSignalDrop:    { group: '진로변경', name: '진로변경 중 신호 미유지', points: 7 },
+  lcSignalKeep:    { group: '진로변경', name: '변경 완료 후 신호 미중지', points: 7 },
+  lcConsecutive:   { group: '진로변경', name: '연속 진로변경', points: 7 },
+  lcForbidden:     { group: '진로변경', name: '진로변경 금지 장소에서 변경', points: 7 },
+  lcDanger:        { group: '진로변경', name: '진로변경 미숙으로 뒤차에 위험·방해', points: 7 },
+  slowDown:        { group: '교차로 등', name: '서행 의무 위반', points: 10 },
+  stopDuty:        { group: '교차로 등', name: '일시정지 의무 위반', points: 10 },
+  turnMethod:      { group: '교차로 등', name: '교차로 좌·우회전 통행방법 위반', points: 7 },
+  turnObstruct:    { group: '교차로 등', name: '좌·우회전 신호 차량 진행 방해', points: 7 },
+  tailgateBox:     { group: '교차로 등', name: '꼬리물기', points: 7 },
+  yieldFail:       { group: '교차로 등', name: '교통정리 없는 교차로 양보 불이행', points: 7 },
+  crosswalk:       { group: '교차로 등', name: '횡단보도 직전 서행·일시정지 위반', points: 10 },
+  endParkBrake:    { group: '주행 종료', name: '종료 후 주차브레이크 미작동', points: 5 },
+  endEngine:       { group: '주행 종료', name: '종료 후 엔진 미정지', points: 5 },
+  endGear:         { group: '주행 종료', name: '종료 후 기어 미조작(1단·후진 또는 P)', points: 5 },
+};
+
+// 이 시뮬레이터에서 아직 자동 채점하지 못하는 항목 (README 참고)
+const ROAD_NOT_AUTOGRADED = {
+  brakeReady: '발 위치(제동 준비)는 입력 장치로 판별할 수 없어 감점하지 않음',
+  overtake:   '앞지르기 상황이 코스에 없어 감점하지 않음',
+};
+
+const ROAD_DQ = {
+  incompetent:   '운전능력이 현저히 부족함 (출발불능 3회 이상, 급조작·급출발 등)',
+  accident:      '교통사고를 야기했거나 사고 위험이 현저함 (안전거리 미확보, 경사로 1m 이상 후방 이동 등)',
+  disobey:       '시험관의 지시·통제에 따르지 않음',
+  signal:        '신호 또는 지시를 따르지 않음',
+  pedestrian:    '보행자 보호의무를 소홀히 함',
+  protectedZone: '어린이·노인·장애인 보호구역 최고속도를 초과함',
+  centerLine:    '도로 중앙선 기준 우측 통행의무를 위반함',
+  overSpeed10:   '법령 또는 안전표지의 최고속도를 시속 10km 넘게 초과함',
+  emergency:     '긴급자동차 우선통행 시 일시정지하거나 진로를 양보하지 않음',
+  schoolBus:     '어린이통학버스 특별보호의무를 위반함',
+  noBelt:        '시험시간 동안 좌석안전띠를 착용하지 않음',
+  timeout:       '시험 제한시간 안에 코스를 마치지 못함',
+};
+
+// ------------------------------ 채점기 ------------------------------
+class Scorer {
+  constructor(kind) {
+    this.kind = kind; // 'function' | 'road'
+    this.table = kind === 'function' ? FUNCTION_ITEMS : ROAD_ITEMS;
+    this.dqTable = kind === 'function' ? FUNCTION_DQ : ROAD_DQ;
+    this.passMark = kind === 'function' ? FUNCTION_PASS : ROAD_PASS;
+    this.deductions = []; // {code, name, points, t, note}
+    this.dq = null;       // {code, reason, t}
+    this.listeners = [];
+  }
+  onEvent(fn) { this.listeners.push(fn); }
+  _emit(ev) { for (const l of this.listeners) l(ev); }
+
+  get total() {
+    const sum = this.deductions.reduce((a, d) => a + d.points, 0);
+    return Math.max(0, 100 - sum);
+  }
+  get disqualified() { return !!this.dq; }
+  get passed() { return !this.dq && this.total >= this.passMark; }
+
+  deduct(code, t = 0, note = '', times = 1) {
+    if (this.dq) return;
+    const item = this.table[code];
+    if (!item) throw new Error('unknown item ' + code);
+    for (let i = 0; i < times; i++) {
+      const d = { code, name: item.name, points: item.points, t, note };
+      this.deductions.push(d);
+      this._emit({ type: 'deduct', ...d, total: this.total });
+    }
+  }
+  // 코드별 횟수 제한 (한 번만 감점되는 항목)
+  deductOnce(code, t = 0, note = '') {
+    if (this.deductions.some((d) => d.code === code)) return false;
+    this.deduct(code, t, note);
+    return true;
+  }
+  disqualify(code, t = 0, extra = '') {
+    if (this.dq) return;
+    const reason = this.dqTable[code];
+    if (!reason) throw new Error('unknown dq ' + code);
+    this.dq = { code, reason: extra ? `${reason} (${extra})` : reason, t };
+    this._emit({ type: 'dq', ...this.dq, total: this.total });
+  }
+  count(code) { return this.deductions.filter((d) => d.code === code).length; }
+
+  summary() {
+    const byGroup = {};
+    for (const d of this.deductions) {
+      (byGroup[d.name] ||= { name: d.name, points: 0, count: 0 });
+      byGroup[d.name].points += d.points;
+      byGroup[d.name].count += 1;
+    }
+    return {
+      kind: this.kind,
+      score: this.dq ? 0 : this.total,
+      rawScore: this.total,
+      passMark: this.passMark,
+      passed: this.passed,
+      disqualified: this.disqualified,
+      dq: this.dq,
+      deductions: this.deductions.map((d) => ({ code: d.code, name: d.name, points: d.points, t: Math.round(d.t * 10) / 10, note: d.note })),
+      grouped: Object.values(byGroup),
+    };
+  }
+}
+
+return { LICENSES, TRANSMISSION_NAME, FUNCTION_PASS, FUNCTION_TIME_LIMIT_SEC, FUNCTION_START_TIMEOUT_SEC, FUNCTION_PARK_TIME_SEC, FUNCTION_SPEED_LIMIT_KMH, FUNCTION_ITEMS, FUNCTION_DQ, ROAD_PASS, ROAD_ITEMS, ROAD_NOT_AUTOGRADED, ROAD_DQ, Scorer };
+})();
+
+// ===== js/sim/geom.js =====
+__m["js/sim/geom.js"] = (() => {
+// 기하 유틸
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const wrapAngle = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 축 정렬 사각형 {x0,y0,x1,y1} 에 대한 부호 있는 거리 (내부 음수, 외부 양수)
+function rectSD(p, r) {
+  const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+  const hx = (r.x1 - r.x0) / 2, hy = (r.y1 - r.y0) / 2;
+  const dx = Math.abs(p[0] - cx) - hx, dy = Math.abs(p[1] - cy) - hy;
+  const ox = Math.max(dx, 0), oy = Math.max(dy, 0);
+  return Math.hypot(ox, oy) + Math.min(Math.max(dx, dy), 0);
+}
+
+function inRect(p, r, pad = 0) {
+  return p[0] >= r.x0 - pad && p[0] <= r.x1 + pad && p[1] >= r.y0 - pad && p[1] <= r.y1 + pad;
+}
+
+// 사각형들의 합집합에 대한 부호 있는 거리
+function unionSD(p, rects) {
+  let best = Infinity, which = null;
+  for (const r of rects) {
+    const d = rectSD(p, r);
+    if (d < best) { best = d; which = r; }
+  }
+  return { sd: best, rect: which };
+}
+
+// 점과 선분 사이 거리
+function distToSeg(p, a, b) {
+  const abx = b[0] - a[0], aby = b[1] - a[1];
+  const l2 = abx * abx + aby * aby;
+  let t = l2 ? ((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / l2 : 0;
+  t = clamp(t, 0, 1);
+  return Math.hypot(p[0] - (a[0] + abx * t), p[1] - (a[1] + aby * t));
+}
+
+// 볼록 다각형(차체) 두 개 겹침 검사 (SAT)
+function polysOverlap(A, B) {
+  for (const poly of [A, B]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p1 = poly[i], p2 = poly[(i + 1) % poly.length];
+      const nx = p1[1] - p2[1], ny = p2[0] - p1[0];
+      let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity;
+      for (const q of A) { const d = nx * q[0] + ny * q[1]; if (d < minA) minA = d; if (d > maxA) maxA = d; }
+      for (const q of B) { const d = nx * q[0] + ny * q[1]; if (d < minB) minB = d; if (d > maxB) maxB = d; }
+      if (maxA < minB || maxB < minA) return false;
+    }
+  }
+  return true;
+}
+
+return { TAU, clamp, lerp, wrapAngle, dist, mulberry32, rectSD, inRect, unionSD, distToSeg, polysOverlap };
+})();
+
+// ===== js/sim/functionTest.js =====
+__m["js/sim/functionTest.js"] = (() => {
+// 제1종·제2종 보통 "기능시험" (장내 기능시험) 시뮬레이션
+// 코스 순서: 탑승/시동 → 기본조작(4개 중 2개 무작위) → 출발 → 경사로 → 직각주차(T자)
+//            → 돌발상황(무작위 위치) → 신호교차로(좌회전) → 가속코스 → 종료
+// 합격 80점, 채점·실격 기준은 shared/rules.js 참고.
+const {
+  Scorer, FUNCTION_ITEMS, FUNCTION_TIME_LIMIT_SEC, FUNCTION_START_TIMEOUT_SEC,
+  FUNCTION_PARK_TIME_SEC, FUNCTION_SPEED_LIMIT_KMH,
+} = __m["js/shared/rules.js"];
+const { unionSD, mulberry32, inRect, wrapAngle, clamp } = __m["js/sim/geom.js"];
+const { KMH } = __m["js/sim/vehicle.js"];
+
+const CURB_MARGIN = 0.5;   // 연석까지의 여유 (m)
+const LINE_EPS = -0.02;           // 바퀴 바깥 모서리가 이 값보다 안쪽이면 선에 닿지 않은 것
+
+function buildFunctionCourse(car) {
+  const w = car.width, L = car.length;
+  const LW = Math.max(w + 1.8, 0.55 * L + 1.1);   // 차로 폭
+  const Rmin = car.wheelbase / Math.tan((car.maxSteer * Math.PI) / 180); // 최소 회전반경(뒷차축)
+  const TW = Math.max(LW, 0.8 * L + 1.0, Rmin + 1.6); // T자 구간 통로 폭
+  const bayW = w + (L > 5.0 ? 0.95 : 0.7), bayD = L + 1.0; // 주차 구획 (대형 차량은 여유를 더 줌)
+  const pocketW = w + 1.2;                         // 출발 대기 구역
+  const IB = LW * 3;                               // 교차로 한 변
+
+  const P = {
+    startLine: 10,
+    rampA: 20, rampTop: 32, rampB: 34, rampEnd: 46,
+    slopeZ0: 21, slopeZ1: 31,
+    incidentA: 49,
+    tStart: 52, tEnd: 84,
+    bayX0: 64, bayX1: 64 + bayW,
+    stopLine: 92,
+    boxX0: 93, boxX1: 93 + IB,
+    boxY0: LW / 2 - IB, boxY1: LW / 2,
+    incidentB: 86,
+    northX0: 93 + IB - LW, northX1: 93 + IB,
+    accZ0: -(IB - LW / 2) - 12,      // 최저속도 표지
+    accWin0: -(IB - LW / 2) - 22,    // 가속 허용 구간 시작 (표지 10m 뒤)
+    accZ1: -(IB - LW / 2) - 52,      // 제한속도 표지
+    endY0: -(IB - LW / 2) - 66, endY1: -(IB - LW / 2) - 84, endConfirmY: -(IB - LW / 2) - 78,
+    endBayW: w + 1.0,
+  };
+  const bayY1 = LW / 2 + bayD;
+  P.confirmY = bayY1 - 1.15;
+  P.laneTop = -(IB - LW / 2) - 92;
+
+  const rects = [
+    { id: 'pocket', x0: -6, y0: LW / 2 - 0.6, x1: 17, y1: LW / 2 + pocketW },
+    { id: 'laneA', x0: -6, y0: -LW / 2, x1: P.tStart + 1, y1: LW / 2 },
+    { id: 'tAisle', x0: P.tStart - 1.5, y0: LW / 2 - TW, x1: P.tEnd + 1, y1: LW / 2, zone: 'T' },
+    { id: 'bay', x0: P.bayX0, y0: LW / 2 - 0.6, x1: P.bayX1, y1: bayY1, zone: 'T' },
+    { id: 'laneB', x0: P.tEnd - 1, y0: -LW / 2, x1: P.boxX0 + 1, y1: LW / 2 },
+    { id: 'box', x0: P.boxX0, y0: P.boxY0, x1: P.boxX1, y1: P.boxY1, zone: 'box' },
+    { id: 'north', x0: P.northX0, y0: P.laneTop, x1: P.northX1, y1: P.boxY0 + 1 },
+    { id: 'endBay', x0: P.northX1 - 0.5, y0: P.endY1, x1: P.northX1 + P.endBayW, y1: P.endY0 },
+  ];
+
+  const slopeFn = (x) => {
+    if (x >= P.rampA && x < P.rampTop) return [0.1, 0];
+    if (x >= P.rampB && x < P.rampEnd) return [-0.1, 0];
+    return [0, 0];
+  };
+
+  return {
+    LW, TW, bayW, bayD, pocketW, IB, P, rects, bayY1,
+    slopeFn: (x, y) => slopeFn(x),
+    spawn: { x: 3, y: LW / 2 + pocketW / 2, heading: 0 },
+    classify(p) { return unionSD(p, rects); },
+  };
+}
+
+// ----------------------------- 신호기 -----------------------------
+class Signal {
+  constructor() { this.state = 'red'; this.t = 0; this.running = false; this.seq = [['red', 9], ['green', 14], ['yellow', 3], ['red', 11]]; this.i = 0; }
+  start() { this.running = true; this.i = 0; this.t = 0; this.state = 'red'; }
+  update(dt) {
+    if (!this.running) return;
+    this.t += dt;
+    if (this.t >= this.seq[this.i][1]) { this.t = 0; this.i = (this.i + 1) % this.seq.length; this.state = this.seq[this.i][0]; }
+  }
+  get remaining() { return this.seq[this.i][1] - this.t; }
+}
+
+const GEAR_MID_AT = ['N', 'D', 'R'];
+
+class FunctionTest {
+  constructor({ veh, license = '2', seed = Date.now() % 100000 } = {}) {
+    this.kind = 'function';
+    this.veh = veh;
+    this.license = license;
+    this.course = buildFunctionCourse(veh.car);
+    this.scorer = new Scorer('function');
+    this.rng = mulberry32(seed);
+    this.seed = seed;
+    this.t = 0;
+    this.events = [];
+    this.signal = new Signal();
+    this.phase = 'prep';       // prep → basic → start → drive → finished
+    this.done = false;
+    this.speaking = null;      // 현재 시험관 음성
+    this.startFails = 0;
+    this.departT0 = null;      // 출발 지시 시각
+    this.moveFails = 0;
+    this.objective = '안전띠를 착용하고 시동을 거세요';
+    this.scorer.onEvent((e) => this._push(e.type === 'dq' ? { type: 'dq', reason: e.reason } : { type: 'deduct', name: e.name, points: e.points, total: e.total, note: e.note }));
+    // 가속코스/구간 상태
+    this.s = {
+      wheelContact: false, contactCd: 0,
+      slope: { active: false, stopT: 0, stopped: false, stopX: 0, peakX: 0, rolled: false, enterT: 0, done: false, stopStart: false, confirmT: 0 },
+      T: { entered: false, t0: 0, confirmed: false, brakeApplied: false, brakeFlagged: false, done: false, over: 0, confirmSay: false, leftBay: false },
+      inc: { spot: this.rng() < 0.5 ? 'A' : 'B', fired: false, t0: 0, fail: false, stage: 0 },
+      sig: { crossed: false, boxT: 0, signalFlagged: false, done: false, started: false },
+      acc: { peak: 0, shifted: false, startGear: null, inWin: false, resolved: false },
+      speed: { over: 0, armed: true, below: 0 },
+      end: { signalChecked: false, confirmed: false, stopT: 0 },
+      startSig: { checked: false, offChecked: false },
+    };
+    this.basic = this._planBasic();
+    this.basicIdx = 0; this.basicStage = 0; this.basicOpFailed = false; this.basicT = 0; this.basicState = 'idle';
+    this.hud = {};
+    this._say('시험을 시작합니다. 좌석안전띠를 착용하고 시동을 걸어 주세요.');
+  }
+
+  // ---------------- 외부 API ----------------
+  drainEvents() { const e = this.events; this.events = []; return e; }
+  result() {
+    const s = this.scorer.summary();
+    s.duration = Math.round(this.t);
+    s.phase = this.phase;
+    return s;
+  }
+  _push(e) { this.events.push({ t: this.t, ...e }); }
+  _say(text, dur) {
+    const d = dur ?? (1.0 + text.length * 0.085);
+    this.speaking = { text, until: this.t + d };
+    this._push({ type: 'say', text, dur: d });
+  }
+  _dq(code, extra) { this.scorer.disqualify(code, this.t, extra); this._finish(); }
+  _ded(code, note) { this.scorer.deduct(code, this.t, note); }
+
+  // ---------------- 기본조작 계획 ----------------
+  _planBasic() {
+    const r = this.rng;
+    const pool = ['gear', 'headlight', 'turnSignal', 'wiper'];
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    const picks = pool.slice(0, 2);
+    const veh = this.veh;
+    return picks.map((id) => {
+      if (id === 'gear' && veh.trans === 'AT') {
+        const mid = GEAR_MID_AT[Math.floor(r() * 3)];
+        return { id, prompts: [
+          { text: `브레이크를 밟고 기어를 ${mid}로 변속하세요.`, ok: (v) => v.gear === mid },
+          { text: '기어를 P로 변속하세요.', ok: (v) => v.gear === 'P' },
+        ] };
+      }
+      if (id === 'gear') {
+        const a = 1 + Math.floor(r() * 3);
+        let b = 2 + Math.floor(r() * 4); if (b === a) b = a + 1; if (b > 5) b = 4;
+        return { id, prompts: [
+          { text: `클러치를 밟고 기어를 ${a}단으로 변속하세요.`, ok: (v) => v.gear === a },
+          { text: `기어를 ${b}단으로 변속하세요.`, ok: (v) => v.gear === b },
+          { text: '기어를 중립으로 놓으세요.', ok: (v) => v.gear === 'N' },
+        ] };
+      }
+      if (id === 'headlight') return { id, prompts: [
+        { text: '전조등을 하향으로 켜세요.', ok: (v) => v.headlight === 1 },
+        { text: '전조등을 상향으로 켜세요.', ok: (v) => v.headlight === 2 },
+        { text: '전조등을 끄세요.', ok: (v) => v.headlight === 0 },
+      ] };
+      if (id === 'turnSignal') return { id, prompts: [
+        { text: '좌측 방향지시등을 켜세요.', ok: (v) => v.left },
+        { text: '방향지시등을 끄세요.', ok: (v) => !v.left && !v.right },
+        { text: '우측 방향지시등을 켜세요.', ok: (v) => v.right },
+        { text: '방향지시등을 끄세요.', ok: (v) => !v.left && !v.right },
+      ] };
+      const n = 1 + Math.floor(r() * 3);
+      return { id: 'wiper', prompts: [
+        { text: `와이퍼를 ${n}단으로 작동하세요.`, ok: (v) => v.wiper === n },
+        { text: '와이퍼를 끄세요.', ok: (v) => v.wiper === 0 },
+      ] };
+    });
+  }
+
+  // ---------------- 메인 업데이트 ----------------
+  update(dt) {
+    if (this.done) return;
+    const veh = this.veh;
+    this.t += dt;
+    this.signal.update(dt);
+    this._handleVehicleEvents(veh.popEvents());
+    if (this.done) return;
+
+    // 시험 내내 안전띠 착용
+    if (this.phase !== 'prep' && !veh.belt && this.phase !== 'finished') { this._dq('noBelt'); return; }
+
+    if (this.phase === 'prep') this._phasePrep();
+    else if (this.phase === 'basic') this._phaseBasic(dt);
+    else if (this.phase === 'start' || this.phase === 'drive') this._phaseDrive(dt);
+
+    this.hud = {
+      phase: this.phase, objective: this.objective, score: this.scorer.total,
+      signal: this.signal.state, signalRemain: this.signal.remaining,
+      elapsed: this.departT0 != null ? this.t - this.departT0 : 0,
+      tTimer: this.s.T.entered && !this.s.T.done ? this.t - this.s.T.t0 : null,
+    };
+  }
+
+  _handleVehicleEvents(evs) {
+    const veh = this.veh;
+    for (const e of evs) {
+      if (e.type === 'engineStart') {
+        if (!veh.belt) { this._dq('noBelt'); return; }
+        if (this.phase === 'prep') this._pushNext();
+      } else if (e.type === 'startFail') {
+        if (this.phase === 'prep') {
+          this.startFails++;
+          this._push({ type: 'toast', text: e.reason });
+          if (this.startFails >= 3) { this._dq('startFail'); return; }
+        }
+      } else if (e.type === 'belt' && !e.on) {
+        if (this.phase !== 'prep' && this.phase !== 'finished') { this._dq('noBelt'); return; }
+      } else if (e.type === 'stall') {
+        if (this.phase === 'drive' || this.phase === 'start') {
+          this._ded('engine', '엔진 정지');
+          if (this.phase === 'start' && this.s.startSig.checked === false) { this.moveFails++; if (this.moveFails >= 3) { this._dq('moveFail'); return; } }
+          this._push({ type: 'toast', text: '시동이 꺼졌습니다. 다시 시동을 거세요' });
+        } else if (this.phase === 'basic') this._push({ type: 'toast', text: '시동이 꺼졌습니다. 다시 시동을 거세요' });
+      } else if (e.type === 'overRev') {
+        if (this.phase === 'drive' || this.phase === 'start') this._ded('overRev', `${e.rpm}RPM`);
+      } else if (e.type === 'grind' && this.phase === 'basic') {
+        this.basicOpFailed = true;
+        this._push({ type: 'toast', text: '클러치를 끝까지 밟고 변속하세요' });
+      } else if (e.type === 'gearBlocked') this._push({ type: 'toast', text: e.reason });
+      else if (e.type === 'jerk') this._push({ type: 'toast', text: '클러치를 천천히 연결하세요' });
+    }
+  }
+
+  _pushNext() { this.phase = 'basic'; this.basicIdx = 0; this.basicStage = 0; this.basicState = 'announce'; this.basicT = 0; this._basicBegin(); }
+
+  // ---------------- 준비 ----------------
+  _phasePrep() {
+    this.objective = this.veh.engineOn ? '기본조작 안내를 기다리세요' : (this.veh.belt ? '시동을 거세요 (T)' : '안전띠를 착용하세요 (B)');
+  }
+
+  // ---------------- 기본조작 ----------------
+  _basicBegin() {
+    const op = this.basic[this.basicIdx];
+    if (!op) { this._beginStartPhase(); return; }
+    this.basicOpFailed = false;
+    this.basicStage = 0;
+    this._basicSayPrompt();
+    this._push({ type: 'phase', name: '기본조작' });
+  }
+  _basicSayPrompt() {
+    const op = this.basic[this.basicIdx];
+    const pr = op.prompts[this.basicStage];
+    this._say(pr.text);
+    this.basicState = 'speaking';
+    this.basicDeadline = this.speaking.until + 8; // 음성 종료 후 8초 안에 조작
+    this.objective = '시험관 안내에 따라 조작하세요: ' + pr.text;
+  }
+  _phaseBasic() {
+    const veh = this.veh;
+    const op = this.basic[this.basicIdx];
+    if (!op) return;
+    const pr = op.prompts[this.basicStage];
+    if (this.basicState === 'speaking') {
+      if (this.t < this.speaking.until) {
+        // 안내가 끝나기 전에 조작하면 감점 (이미 만족 상태가 되었다면)
+        if (this._expectFromStart === undefined) this._expectFromStart = pr.ok(veh);
+        else if (!this._expectFromStart && pr.ok(veh)) { this.basicOpFailed = true; this._push({ type: 'toast', text: '안내가 끝난 뒤에 조작하세요' }); this._expectFromStart = true; }
+        return;
+      }
+      this._expectFromStart = undefined;
+      this.basicState = 'waiting';
+    }
+    if (this.basicState === 'waiting') {
+      if (pr.ok(veh)) { this.basicState = 'pause'; this.basicT = this.t + 0.9; this._basicAdvance(); }
+      else if (this.t > this.basicDeadline) { this.basicOpFailed = true; this.basicState = 'pause'; this.basicT = this.t + 0.5; this._push({ type: 'toast', text: '시간이 지났습니다' }); this._basicAdvance(); }
+    } else if (this.basicState === 'pause') {
+      if (this.t >= this.basicT) {
+        if (this.basicStage < op.prompts.length) this._basicSayPrompt();
+        else this._basicOpEnd();
+      }
+    }
+  }
+  _basicAdvance() { this.basicStage++; }
+  _basicOpEnd() {
+    const op = this.basic[this.basicIdx];
+    if (this.basicOpFailed) this._ded(op.id, FUNCTION_ITEMS[op.id].name);
+    else this._push({ type: 'toast', text: `${FUNCTION_ITEMS[op.id].name} 확인되었습니다`, good: true });
+    this.basicIdx++;
+    if (this.basicIdx >= this.basic.length) this._beginStartPhase();
+    else { this.basicStage = 0; this.basicState = 'speaking'; this._basicBegin(); }
+  }
+
+  _beginStartPhase() {
+    this.phase = 'start';
+    this._say('지금부터 기본 주행 능력을 점검합니다. 주차 브레이크를 해제하고 출발하세요.');
+    this.departT0 = this.t + this.speaking.until - this.t;
+    this.startReadyAt = this.speaking.until;
+    this._push({ type: 'phase', name: '출발' });
+  }
+
+  // ---------------- 주행 ----------------
+  _phaseDrive(dt) {
+    const veh = this.veh, P = this.course.P, s = this.s;
+    const front = veh.front();
+    const speedKmh = veh.kmh;
+
+    // 주차브레이크 채운 채 출발 → 실격
+    if (veh.handbrake && veh.speed > 0.6 && this.t > this.startReadyAt - 1.5) { this._dq('parkBrakeOn'); return; }
+
+    // 출발 대기 (출발선)
+    if (this.phase === 'start') {
+      this.objective = '주차브레이크를 풀고 좌측 방향지시등을 켠 뒤 출발하세요';
+      if (this.t > this.startReadyAt && (veh.speed > 0.3)) {
+        this.phase = 'drive';
+        this._push({ type: 'phase', name: '주행' });
+      } else if (this.t > this.startReadyAt + FUNCTION_START_TIMEOUT_SEC) { this._dq('startTimeout'); return; }
+      else return;
+    }
+
+    // 제한시간
+    if (this.t - this.startReadyAt > FUNCTION_TIME_LIMIT_SEC) { this._dq('timeout'); return; }
+
+    // 1) 바퀴와 선·연석
+    if (!this._checkLines(dt)) return;
+
+    // 2) 출발 방향지시등
+    if (!s.startSig.checked && front[0] > P.startLine) {
+      s.startSig.checked = true;
+      if (!veh.left) this._ded('startSignal', '출발 시 좌측 방향지시등을 켜지 않음');
+    }
+    if (!s.startSig.offChecked && veh.x > P.rampA - 2) {
+      s.startSig.offChecked = true;
+      if (veh.left || veh.right) this._ded('startSignal', '진입 후 방향지시등을 끄지 않음');
+    }
+
+    // 3) 경사로
+    this._slope(dt);
+    if (this.done) return;
+    // 4) 돌발
+    this._incident(dt);
+    // 5) T자 주차
+    this._tPark(dt);
+    if (this.done) return;
+    // 6) 신호교차로
+    this._signalBox(dt);
+    if (this.done) return;
+    // 7) 가속코스
+    this._accel(dt);
+    if (this.done) return;
+    // 8) 종료
+    this._finishZone(dt);
+    this._objective();
+  }
+
+  _objective() {
+    const s = this.s, P = this.course.P, veh = this.veh;
+    let o = '앞으로 진행하세요';
+    if (veh.x < P.rampA) o = '경사로로 진행하세요';
+    else if (!s.slope.done) o = s.slope.stopped ? '출발하세요' : '경사로 정지구간에서 3초 이상 정지하세요';
+    else if (!s.T.done) o = s.T.confirmed ? '주차브레이크를 걸었다가 풀고 전진해 빠져나가세요' : (s.T.entered ? '후진으로 주차 구획에 진입하고 확인선을 지나세요' : '직각주차(T자) 구간으로 진행하세요');
+    else if (!s.sig.done) o = this.signal.state === 'green' ? '신호에 따라 좌회전하세요' : '정지선 앞에서 신호를 기다리세요';
+    else if (!s.end.confirmed) o = '가속코스: 20km/h를 넘긴 뒤 표지에서 20km/h 이하로 줄이세요';
+    else o = '정차하세요';
+    this.objective = o;
+  }
+
+  // 바퀴 선 접촉 / 연석 접촉 판정
+  _checkLines(dt) {
+    const veh = this.veh, c = this.course, s = this.s;
+    s.contactCd = Math.max(0, s.contactCd - dt);
+    let touching = false, zoneT = false, curb = false;
+    for (const wp of veh.wheelPoints()) {
+      const { sd, rect } = c.classify(wp);
+      if (sd > CURB_MARGIN) { curb = true; break; }
+      if (sd > LINE_EPS) {
+        touching = true;
+        if (rect && (rect.zone === 'T')) zoneT = true;
+      }
+    }
+    if (curb) { this._dq('curb'); return false; }
+    if (touching && !s.wheelContact && s.contactCd === 0) {
+      s.contactCd = 2.0;
+      if (zoneT) this._ded('parkLine', '검지선 접촉'); else this._ded('lane', '중앙선·차선·길가장자리구역선 접촉');
+    }
+    s.wheelContact = touching;
+    return true;
+  }
+
+  // ---- 경사로 ----
+  _slope(dt) {
+    const veh = this.veh, P = this.course.P, sl = this.s.slope;
+    if (sl.done) return;
+    const fa = veh.frontAxle();
+    if (!sl.active) {
+      if (fa[0] >= P.slopeZ0) { sl.active = true; sl.enterT = this.t; sl.peakX = veh.x; this._push({ type: 'phase', name: '경사로' }); }
+      return;
+    }
+    const inZone = fa[0] >= P.slopeZ0 && fa[0] <= P.slopeZ1;
+    if (!sl.stopStart) {
+      if (inZone && veh.speed < 0.08) { sl.stopStart = true; sl.stopX = veh.x; sl.stopT = 0; sl.peakX = veh.x; }
+    }
+    if (sl.stopStart) {
+      if (inZone || veh.x < P.slopeZ1) {
+        if (veh.speed < 0.15) sl.stopT += dt; else if (veh.v > 0.3 && sl.stopT < 3) { sl.stopT = 0; sl.stopStart = false; } // 3초 못 채우고 출발 → 정지 무효
+        if (!sl.stopped && sl.stopT >= 3 && inZone) { sl.stopped = true; sl.confirmT = this.t; this._push({ type: 'toast', text: '정지 확인되었습니다. 출발하세요', good: true }); }
+        sl.peakX = Math.max(sl.peakX, veh.x);
+        const back = sl.peakX - veh.x;
+        // 정지 후 출발할 때 후방으로 밀린 거리
+        if (sl.stopped || veh.speed < 0.5) {
+          if (back >= 1.0) { this._dq('slopeSlide'); return; }
+          if (back >= 0.5 && !sl.rolled) { sl.rolled = true; this._ded('slope', '후방으로 50cm 이상 밀림'); }
+        }
+      }
+    }
+    // 정지구간 이행 후 30초 이내 통과
+    if (sl.stopped && this.t - sl.confirmT > 30 && veh.x < P.slopeZ1) { this._dq('slopeTimeout'); return; }
+    // 뒷차축이 정지구간을 벗어나면 통과
+    if (veh.x > P.slopeZ1 + 0.5) {
+      if (!sl.stopped) { this._dq('slopeNoStop'); return; }
+      sl.done = true;
+    }
+  }
+
+  // ---- 돌발 ----
+  _incident(dt) {
+    const veh = this.veh, P = this.course.P, inc = this.s.inc;
+    if (inc.stage === 3) return;
+    const spotX = inc.spot === 'A' ? P.incidentA : P.incidentB;
+    if (inc.stage === 0) {
+      const ready = inc.spot === 'A' ? this.s.slope.done : this.s.T.done;
+      if (ready && veh.x >= spotX && veh.speed > 0.3) {
+        inc.stage = 1; inc.t0 = this.t;
+        this._push({ type: 'incident' });
+        this._say('돌발! 돌발!', 1.2);
+        this._push({ type: 'phase', name: '돌발상황' });
+      }
+      return;
+    }
+    const el = this.t - inc.t0;
+    if (inc.stage === 1) {
+      if (!inc.f1 && el >= 2.0) { inc.f1 = true; if (veh.speed > 0.15) { inc.fail = true; this._push({ type: 'toast', text: '2초 안에 정지하지 못했습니다' }); } }
+      if (!inc.f2 && el >= 3.0) { inc.f2 = true; if (!veh.hazard) { inc.fail = true; this._push({ type: 'toast', text: '3초 안에 비상등을 켜지 않았습니다' }); } }
+      if (el >= 5.0) {
+        inc.stage = 2; this._say('비상등을 끄고 다시 출발하세요.');
+        this._push({ type: 'incidentEnd' });
+        inc.resumeT = this.t + this.speaking.until - this.t;
+      }
+    } else if (inc.stage === 2) {
+      if (this.t > inc.resumeT && veh.hazard && veh.speed > 1.0) { inc.fail = true; this._push({ type: 'toast', text: '비상등을 끄지 않고 출발했습니다' }); inc.stage = 3; }
+      else if (!veh.hazard && veh.speed > 0.3) inc.stage = 3;
+      if (inc.stage === 3 && inc.fail) this._ded('incident', '돌발상황 대처');
+      else if (inc.stage === 3) this._push({ type: 'toast', text: '돌발상황 대처 확인', good: true });
+    }
+  }
+
+  // ---- 직각주차 (T자) ----
+  _tPark(dt) {
+    const veh = this.veh, P = this.course.P, c = this.course, T = this.s.T;
+    if (T.done) return;
+    const f = veh.front();
+    if (!T.entered) {
+      if (this.s.slope.done && f[0] >= P.tStart) { T.entered = true; T.t0 = this.t; this._push({ type: 'phase', name: '직각주차' }); }
+      return;
+    }
+    // 지정시간(120초) 초과 시마다 10점 감점
+    const elapsed = this.t - T.t0;
+    const due = Math.floor(elapsed / FUNCTION_PARK_TIME_SEC);
+    while (T.over < due) { T.over++; this._ded('parkTime', `${T.over * FUNCTION_PARK_TIME_SEC}초 초과`); }
+
+    const rw = veh.rearWheels();
+    const bay = c.rects.find((r) => r.id === 'bay');
+    const inBay = rw.every((p) => p[0] > bay.x0 && p[0] < bay.x1 && p[1] > c.LW / 2);
+    if (rw.some((p) => p[0] > bay.x0 && p[0] < bay.x1 && p[1] > c.LW / 2 + 0.3)) T.enteredBay = true;
+    const straight = Math.abs(wrapAngle(veh.heading + Math.PI / 2)) < 0.22;
+    if (!T.confirmed && inBay && veh.y >= P.confirmY && straight) {
+      T.confirmed = true;
+      this._say('확인되었습니다. 주차 브레이크를 조작하세요.', 1.8);
+      this._push({ type: 'confirm' });
+    }
+    if (T.confirmed) {
+      if (veh.handbrake && veh.speed < 0.3) T.brakeApplied = true;
+      // 구획에서 빠져나오기 시작 (뒷차축이 확인선보다 앞으로 이동)
+      if (veh.y < P.confirmY - 0.8 && !T.brakeApplied && !T.brakeFlagged) { T.brakeFlagged = true; this._ded('parkBrake', '주차브레이크 미작동'); }
+    }
+    // 구획에서 빠져나옴
+    const exited = T.enteredBay && veh.x > bay.x1 + 1.6 && Math.abs(wrapAngle(veh.heading)) < 0.7 && veh.y < c.LW / 2 + 0.2;
+    if (exited) {
+      if (!T.confirmed) { this._dq('noConfirm'); return; }
+      T.done = true; this._push({ type: 'toast', text: '직각주차 완료', good: true });
+    } else if (veh.x > P.tEnd + 2) { // 구획을 시도하지 않고 지나감
+      if (!T.confirmed) { this._dq('courseSkip'); return; }
+    }
+  }
+
+  // ---- 신호교차로 ----
+  _signalBox(dt) {
+    const veh = this.veh, P = this.course.P, sg = this.s.sig;
+    if (sg.done) return;
+    const f = veh.front();
+    if (!sg.started && this.s.T.done && veh.x > P.tEnd - 2) { sg.started = true; this.signal.start(); this._push({ type: 'phase', name: '신호교차로' }); }
+    if (!sg.started) return;
+    // 정지선
+    if (!sg.crossed && f[0] > P.stopLine) {
+      sg.crossed = true;
+      if (this.signal.state !== 'green') { this._dq('signalViolate', this.signal.state === 'red' ? '적색 신호' : '황색 신호'); return; }
+    }
+    // 교차로 진입 후 좌회전 방향지시등
+    const inBox = f[0] > P.boxX0 && f[1] > P.boxY0;
+    if (inBox && veh.heading < -0.3 && !sg.signalFlagged && !veh.left) { sg.signalFlagged = true; this._ded('turnSignal2', '좌회전 시 방향지시등을 켜지 않음'); }
+    // 교차로 안에서 20초 이상 정차
+    if (inBox && veh.speed < 0.1) {
+      sg.boxT += dt;
+      if (sg.boxT >= 20) { sg.boxT = 0; this._ded('signalX', '교차로 안 20초 이상 정차'); }
+    } else if (inBox) sg.boxT = 0;
+    if (veh.y < P.boxY0 && veh.x > P.northX0) { sg.done = true; this._push({ type: 'toast', text: '신호교차로 통과', good: true }); }
+  }
+
+  // ---- 가속코스 ----
+  _accel(dt) {
+    const veh = this.veh, P = this.course.P, a = this.s.acc, sp = this.s.speed;
+    const f = veh.front();
+    const kmh = veh.kmh;
+    const inWin = this.s.sig.done && f[1] <= P.accWin0 && f[1] > P.accZ1;
+    if (this.s.sig.done && !a.started && f[1] <= P.accZ0) { a.started = true; this._push({ type: 'phase', name: '가속코스' }); }
+    // 20km/h 제한 구간 (가속 허용 구간 제외)
+    const limited = !inWin;
+    if (limited && kmh > FUNCTION_SPEED_LIMIT_KMH + 0.01) {
+      sp.over += dt;
+      if (sp.over > 0.35 && sp.armed) { sp.armed = false; this._ded('speed', `${Math.round(kmh)}km/h`); }
+    } else { sp.over = 0; if (kmh <= FUNCTION_SPEED_LIMIT_KMH - 1) sp.armed = true; }
+    // 가속 허용 구간에서 20km/h 초과 + (수동) 기어 변속
+    if (!this.s.sig.done) return;
+    if (inWin && !a.inWin) { a.inWin = true; a.startGear = veh.gear; }
+    if (inWin) {
+      a.peak = Math.max(a.peak, kmh);
+      if (veh.gear !== a.startGear) a.shifted = true;
+    }
+    if (!a.resolved && f[1] <= P.accZ1) {
+      a.resolved = true;
+      if (a.peak <= FUNCTION_SPEED_LIMIT_KMH) this._ded('accel', '가속구간에서 20km/h를 넘지 못함');
+      if (veh.trans === 'MT' && !a.shifted) { this._dq('noGearShift'); return; }
+    }
+  }
+
+  // ---- 종료 ----
+  _finishZone(dt) {
+    const veh = this.veh, P = this.course.P, e = this.s.end;
+    if (!this.s.acc.resolved) return;
+    const f = veh.front();
+    if (!e.signalChecked && f[1] <= P.endY0) {
+      e.signalChecked = true;
+      if (!veh.right) this._ded('endSignal', '종료 시 우측 방향지시등을 켜지 않음');
+      this._push({ type: 'phase', name: '종료' });
+    }
+    if (!e.confirmed && veh.y <= P.endConfirmY) { e.confirmed = true; this._say('종료 지점입니다. 정차하세요.', 1.8); }
+    if (e.confirmed) {
+      if (veh.speed < 0.05) e.stopT += dt; else e.stopT = 0;
+      if (e.stopT >= 1.0 || veh.y < P.endY1 - 1) this._finish();
+    }
+  }
+
+  _finish() {
+    if (this.done) return;
+    this.done = true;
+    this.phase = 'finished';
+    const r = this.result();
+    if (!this.scorer.disqualified) this._say(r.passed ? '시험이 종료되었습니다. 합격입니다.' : '시험이 종료되었습니다. 불합격입니다.', 2.5);
+    this._push({ type: 'done', result: r });
+  }
+}
+
+return { CURB_MARGIN, buildFunctionCourse, FunctionTest };
+})();
+
+// ===== js/sim/roadWorld.js =====
+__m["js/sim/roadWorld.js"] = (() => {
+// 도로주행시험용 가상 도시: 3x3 격자, 편도 2차로 대로(A)와 편도 1차로 이면도로(B),
+// 신호등·정지표지·횡단보도·어린이보호구역·주차 차량·보행자·AI 차량
+const { mulberry32, clamp } = __m["js/sim/geom.js"];
+
+const LANE_W = 3.3;
+const X = [0, 260, 520];
+const Y = [0, 200, 400];
+const ROW_TYPE = ['B', 'A', 'B'];   // j행 (동서 방향 도로)
+const COL_TYPE = ['B', 'A', 'B'];   // i열 (남북 방향 도로)
+const EXT = 90;                      // 외곽 연장 도로 길이
+
+const nLanes = (t) => (t === 'A' ? 2 : 1);
+const halfLane = (t) => nLanes(t) * LANE_W;                  // 중앙선 ~ 차로 바깥선
+const edgeHalf = (t) => (t === 'A' ? halfLane(t) + 0.8 : halfLane(t) + 2.3); // 연석까지
+const limitOf = (t) => (t === 'A' ? 50 : 40);
+
+// 제어 방식: 'signal' | 'stop' | 'none'
+const NODE_CTRL = [
+  ['none', 'signal', 'stop'],     // j=0: i=0,1,2
+  ['signal', 'signal', 'signal'], // j=1
+  ['none', 'signal', 'none'],     // j=2
+];
+const SCHOOL = { col: 2, y0: 20, y1: 150, cross: 92, limit: 30 };  // 어린이보호구역 (x=520, 남북 방향)
+
+const DIRS = { E: [1, 0], W: [-1, 0], S: [0, 1], N: [0, -1] };
+const DIR_ANGLE = { E: 0, S: Math.PI / 2, W: Math.PI, N: -Math.PI / 2 };
+const LEFT_OF = { E: 'N', N: 'W', W: 'S', S: 'E' };
+const RIGHT_OF = { E: 'S', S: 'W', W: 'N', N: 'E' };
+const OPP = { E: 'W', W: 'E', N: 'S', S: 'N' };
+
+function nodeBox(i, j) {
+  const hx = edgeHalf(COL_TYPE[i]), hy = edgeHalf(ROW_TYPE[j]);
+  return { x0: X[i] - hx, x1: X[i] + hx, y0: Y[j] - hy, y1: Y[j] + hy, cx: X[i], cy: Y[j] };
+}
+// 접근 방향별 정지선 위치 (진행축 좌표). dir = 진행방향
+function stopLinePos(i, j, dir) {
+  const b = nodeBox(i, j);
+  if (dir === 'E') return b.x0 - 2;
+  if (dir === 'W') return b.x1 + 2;
+  if (dir === 'S') return b.y0 - 2;
+  return b.y1 + 2; // N
+}
+
+function dirFromHeading(h) {
+  const a = ((h % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  if (a < Math.PI / 4 || a >= (7 * Math.PI) / 4) return 'E';
+  if (a < (3 * Math.PI) / 4) return 'S';
+  if (a < (5 * Math.PI) / 4) return 'W';
+  return 'N';
+}
+
+class RoadWorld {
+  constructor(seed = 7) {
+    this.seed = seed;
+    this.rng = mulberry32(seed);
+    this.time = 0;
+    this.nodes = [];
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) this.nodes.push({ i, j, ctrl: NODE_CTRL[j][i], box: nodeBox(i, j) });
+    this.sigOffset = {};
+    this.nodes.forEach((n) => { this.sigOffset[n.i + ',' + n.j] = (n.i * 7 + n.j * 13) % 44; });
+    this.bounds = { x0: X[0] - EXT, x1: X[2] + EXT, y0: Y[0] - EXT, y1: Y[2] + EXT };
+    this.parked = [];
+    this._buildParked();
+    this.buildings = this._buildBuildings();
+    this.crosswalks = this._buildCrosswalks();
+    this.peds = [{ id: 0, state: 'idle', x: 0, y: 0, t: 0 }];
+    this.zones = {
+      start: { x: 60, y: Y[2] + 4.45, heading: 0 },
+      pullOver: { x0: X[0] - 6.0, x1: X[0] - 2.4, y0: 280, y1: 310 },       // 길가장자리 정차 구역 (x=0 남쪽 방향, 서쪽(우측) 가장자리)
+      finish: { x0: 178, x1: 200, y0: Y[2] + 3.3, y1: Y[2] + 5.6 },       // 종료 정차 구역 (y=400 동쪽 방향, 남쪽(우측) 가장자리)
+    };
+    this.ai = [];
+    this._buildAI();
+    this.ambulance = null;
+  }
+
+  // ---------- 신호 ----------
+  // axis: 'col'(남북) | 'row'(동서). 반환 'green' | 'yellow' | 'red'
+  signalState(i, j, axis) {
+    const n = NODE_CTRL[j][i];
+    if (n !== 'signal') return null;
+    const t = (this.time + this.sigOffset[i + ',' + j]) % 44;
+    const slot = axis === 'col' ? [0, 17, 20] : [22, 39, 42];
+    if (t >= slot[0] && t < slot[1]) return 'green';
+    if (t >= slot[1] && t < slot[2]) return 'yellow';
+    return 'red';
+  }
+  signalFor(i, j, dir) { return this.signalState(i, j, dir === 'E' || dir === 'W' ? 'row' : 'col'); }
+
+  // ---------- 위치 판정 ----------
+  // 반환: { kind: 'box'|'road'|'off', node?, road?:{axis,idx}, dir?, lane?, d?, inStrip?, limit }
+  locate(x, y) {
+    for (const n of this.nodes) {
+      const b = n.box;
+      if (x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) return { kind: 'box', node: [n.i, n.j], limit: 40 };
+    }
+    for (let j = 0; j < 3; j++) {
+      const t = ROW_TYPE[j], d = y - Y[j];
+      if (Math.abs(d) <= edgeHalf(t) && x >= this.bounds.x0 && x <= this.bounds.x1) return this._lane('row', j, t, d, x);
+    }
+    for (let i = 0; i < 3; i++) {
+      const t = COL_TYPE[i], d = x - X[i];
+      if (Math.abs(d) <= edgeHalf(t) && y >= this.bounds.y0 && y <= this.bounds.y1) return this._lane('col', i, t, d, y);
+    }
+    return { kind: 'off', limit: 0 };
+  }
+  _lane(axis, idx, t, d, along) {
+    const n = nLanes(t);
+    const dir = axis === 'row' ? (d > 0 ? 'E' : 'W') : (d > 0 ? 'N' : 'S');
+    const ad = Math.abs(d);
+    const lane = ad >= n * LANE_W ? n + 1 : Math.floor(ad / LANE_W) + 1; // n+1 = 갓길/주차구역
+    let limit = limitOf(t);
+    if (axis === 'col' && idx === SCHOOL.col && along >= SCHOOL.y0 && along <= SCHOOL.y1) limit = SCHOOL.limit;
+    return { kind: 'road', axis, idx, type: t, dir, lane, nLanes: n, d, ad, inStrip: lane > n, limit, school: limit === SCHOOL.limit && axis === 'col' && idx === SCHOOL.col };
+  }
+  inRoad(x, y) { return this.locate(x, y).kind !== 'off'; }
+  // 연석(도로 바깥)까지의 거리: 음수=도로 안쪽 (대략적인 값)
+  curbDist(x, y) {
+    let best = Infinity;
+    const b = this.bounds;
+    for (let j = 0; j < 3; j++) { const h = edgeHalf(ROW_TYPE[j]); if (x >= b.x0 && x <= b.x1) best = Math.min(best, Math.abs(y - Y[j]) - h); }
+    for (let i = 0; i < 3; i++) { const h = edgeHalf(COL_TYPE[i]); if (y >= b.y0 && y <= b.y1) best = Math.min(best, Math.abs(x - X[i]) - h); }
+    for (const n of this.nodes) { const bb = n.box; const dx = Math.max(bb.x0 - x, 0, x - bb.x1), dy = Math.max(bb.y0 - y, 0, y - bb.y1); if (dx === 0 && dy === 0) best = Math.min(best, -1); }
+    return best;
+  }
+
+  // ---------- 주차 차량 ----------
+  _buildParked() {
+    const r = mulberry32(this.seed + 99);
+    const add = (cx, cy, heading) => this.parked.push({ x: cx, y: cy, heading, len: 4.3, wid: 1.8, color: Math.floor(r() * 8) });
+    const skip = (axis, idx, side, a) => { // 특정 구간은 비워둠
+      if (axis === 'row' && idx === 2 && side === 1 && ((a > 30 && a < 135) || (a > 135 && a < 235))) return true;
+      if (axis === 'col' && idx === 0 && side === -1 && a > 255 && a < 335) return true;
+      return false;
+    };
+    for (let j = 0; j < 3; j++) {
+      if (ROW_TYPE[j] !== 'B') continue;
+      const off = LANE_W + 1.15;
+      for (const side of [1, -1]) {
+        for (let x = this.bounds.x0 + 30; x < this.bounds.x1 - 30; x += 11 + r() * 6) {
+          if (this._nearNodeBox(x, Y[j] + side * off, 15)) continue;
+          if (skip('row', j, side, x)) continue;
+          if (r() < 0.5) add(x, Y[j] + side * off, side === 1 ? 0 : Math.PI);
+        }
+      }
+    }
+    for (let i = 0; i < 3; i++) {
+      if (COL_TYPE[i] !== 'B') continue;
+      const off = LANE_W + 1.15;
+      for (const side of [1, -1]) {
+        for (let y = this.bounds.y0 + 30; y < this.bounds.y1 - 30; y += 11 + r() * 6) {
+          if (this._nearNodeBox(X[i] + side * off, y, 15)) continue;
+          if (skip('col', i, side, y)) continue;
+          if (i === SCHOOL.col && Math.abs(y - SCHOOL.cross) < 14) continue;
+          if (r() < 0.5) add(X[i] + side * off, y, side === 1 ? -Math.PI / 2 : Math.PI / 2);
+        }
+      }
+    }
+  }
+  _nearNodeBox(x, y, pad) {
+    for (const n of this.nodes) { const b = n.box; if (x > b.x0 - pad && x < b.x1 + pad && y > b.y0 - pad && y < b.y1 + pad) return true; }
+    return false;
+  }
+
+  _buildBuildings() {
+    const r = mulberry32(this.seed + 5);
+    const out = [];
+    const xs = [this.bounds.x0, ...X.map((x, i) => x), this.bounds.x1];
+    const ys = [this.bounds.y0, ...Y, this.bounds.y1];
+    for (let a = 0; a < xs.length - 1; a++) for (let b = 0; b < ys.length - 1; b++) {
+      const cx0 = (a === 0 ? this.bounds.x0 : X[a - 1] + edgeHalf(COL_TYPE[a - 1])) + 3;
+      const cx1 = (a === xs.length - 2 ? this.bounds.x1 : X[a] - edgeHalf(COL_TYPE[a])) - 3;
+      const cy0 = (b === 0 ? this.bounds.y0 : Y[b - 1] + edgeHalf(ROW_TYPE[b - 1])) + 3;
+      const cy1 = (b === ys.length - 2 ? this.bounds.y1 : Y[b] - edgeHalf(ROW_TYPE[b])) - 3;
+      if (cx1 - cx0 < 20 || cy1 - cy0 < 20) continue;
+      const w = cx1 - cx0, h = cy1 - cy0;
+      const nx = Math.max(1, Math.floor(w / 60)), ny = Math.max(1, Math.floor(h / 55));
+      for (let u = 0; u < nx; u++) for (let v = 0; v < ny; v++) {
+        const bw = w / nx - 5, bh = h / ny - 5;
+        out.push({ x0: cx0 + (w / nx) * u + 2.5, y0: cy0 + (h / ny) * v + 2.5, w: bw, h: bh, tone: Math.floor(r() * 4), floors: 2 + Math.floor(r() * 9) });
+      }
+    }
+    return out;
+  }
+
+  _buildCrosswalks() {
+    const out = [];
+    for (const n of this.nodes) {
+      if (n.ctrl !== 'signal') continue;
+      const b = n.box;
+      out.push({ axis: 'h', x0: b.x0 - 6.5, x1: b.x0 - 2.5, y0: b.y0, y1: b.y1, node: [n.i, n.j] });
+      out.push({ axis: 'h', x0: b.x1 + 2.5, x1: b.x1 + 6.5, y0: b.y0, y1: b.y1, node: [n.i, n.j] });
+      out.push({ axis: 'v', x0: b.x0, x1: b.x1, y0: b.y0 - 6.5, y1: b.y0 - 2.5, node: [n.i, n.j] });
+      out.push({ axis: 'v', x0: b.x0, x1: b.x1, y0: b.y1 + 2.5, y1: b.y1 + 6.5, node: [n.i, n.j] });
+    }
+    const h = edgeHalf(COL_TYPE[SCHOOL.col]);
+    out.push({ axis: 'v', x0: X[SCHOOL.col] - h, x1: X[SCHOOL.col] + h, y0: SCHOOL.cross - 3, y1: SCHOOL.cross + 3, school: true });
+    return out;
+  }
+
+  // ---------- AI 차량 ----------
+  _buildAI() {
+    const mk = (axis, idx, dir, lane, along, speedKmh, color) => ({
+      axis, idx, dir, lane, along, v: speedKmh / 3.6, target: speedKmh / 3.6, color,
+      len: 4.4, wid: 1.8, x: 0, y: 0, heading: DIR_ANGLE[dir], braking: false, kind: 'car',
+    });
+    const r = this.rng;
+    const cars = [];
+    // 대로 (y=200 행, x=260 열) 에 차량 배치
+    cars.push(mk('row', 1, 'E', 2, 80, 42, 1), mk('row', 1, 'E', 1, 330, 38, 4), mk('row', 1, 'W', 1, 450, 40, 2), mk('row', 1, 'W', 2, 150, 44, 5), mk('row', 1, 'E', 2, 470, 40, 6));
+    cars.push(mk('col', 1, 'N', 1, 330, 40, 3), mk('col', 1, 'S', 2, 60, 42, 7), mk('col', 1, 'S', 1, 330, 38, 0), mk('col', 1, 'N', 2, 140, 44, 1));
+    // 이면도로에서 비보호 교차로(0,2)를 가로지르는 차량 (남북 방향 x=0)
+    cars.push(mk('col', 0, 'N', 1, 520, 28, 4), mk('col', 0, 'S', 1, 190, 28, 2));
+    // 이면도로 y=0 행
+    cars.push(mk('row', 0, 'W', 1, 440, 30, 6));
+    for (const c of cars) { c.ttype = c.axis === 'row' ? ROW_TYPE[c.idx] : COL_TYPE[c.idx]; this._placeAI(c); }
+    this.ai = cars;
+  }
+  _laneCenter(c) {
+    const off = (c.lane - 0.5) * LANE_W;
+    if (c.axis === 'row') {
+      const s = c.dir === 'E' ? 1 : -1;
+      return [c.along, Y[c.idx] + s * off];
+    }
+    const s = c.dir === 'N' ? 1 : -1;
+    return [X[c.idx] + s * off, c.along];
+  }
+  _placeAI(c) {
+    const [x, y] = this._laneCenter(c);
+    c.x = x; c.y = y; c.heading = DIR_ANGLE[c.dir];
+  }
+
+  // 구급차 (긴급자동차) 이벤트
+  spawnAmbulance(playerX, playerY, dir) {
+    const back = OPP[dir];
+    const v = DIRS[back];
+    const c = {
+      axis: dir === 'E' || dir === 'W' ? 'row' : 'col', idx: 1, dir, lane: 1, along: 0, v: 22, target: 22, color: -1, len: 5.4, wid: 2.0,
+      x: playerX + v[0] * 110, y: playerY + v[1] * 110, heading: DIR_ANGLE[dir], kind: 'ambulance', ttype: 'A',
+    };
+    c.axis === 'row' ? (c.along = c.x) : (c.along = c.y);
+    // 1차로(중앙선 쪽) 중심에 맞춤
+    const [cx, cy] = this._laneCenter(c);
+    if (c.axis === 'row') c.y = cy; else c.x = cx;
+    this.ambulance = c;
+    this.ai.push(c);
+    return c;
+  }
+
+  // 정지선까지 거리 (AI용): 신호가 적색/황색이면 정지
+  _aiShouldStop(c) {
+    const d = DIRS[c.dir];
+    for (const n of this.nodes) {
+      if (n.ctrl !== 'signal') continue;
+      if (c.axis === 'row' ? n.j !== c.idx : n.i !== c.idx) continue;
+      const sl = stopLinePos(n.i, n.j, c.dir);
+      const ahead = c.axis === 'row' ? (sl - c.x) * d[0] : (sl - c.y) * d[1];
+      if (ahead > -1 && ahead < 28) {
+        const st = this.signalFor(n.i, n.j, c.dir);
+        if (st !== 'green') return ahead;
+      }
+    }
+    return null;
+  }
+
+  update(dt, player) {
+    this.time += dt;
+    const all = this.ai;
+    for (const c of all) {
+      const d = DIRS[c.dir];
+      const isAmb = c.kind === 'ambulance';
+      let target = c.target;
+      // 신호 대기
+      const stopAhead = isAmb ? null : this._aiShouldStop(c);
+      let gap = Infinity;
+      if (stopAhead !== null) gap = Math.min(gap, stopAhead - 1.5);
+      // 앞차 간격
+      const others = [...all.filter((o) => o !== c), ...(player ? [{ x: player.x, y: player.y, len: player.len, wid: player.wid, player: true, dir: player.dir, heading: player.heading, v: player.v }] : [])];
+      for (const o of others) {
+        const rx = o.x - c.x, ry = o.y - c.y;
+        const along = rx * d[0] + ry * d[1];
+        const lat = Math.abs(rx * -d[1] + ry * d[0]);
+        const sameLane = lat < (o.player ? 2.0 : 1.6);
+        if (along > 0 && along < 40 && sameLane) {
+          const tip = o.len ? o.len / 2 : 2.2;
+          gap = Math.min(gap, along - tip - c.len / 2);
+        }
+      }
+      if (gap < 45) target = Math.min(target, Math.sqrt(2 * 3.2 * Math.max(0, gap - 2.5)));
+      const acc = target > c.v ? 1.6 : -8;
+      c.v += clamp(target - c.v, -Math.abs(acc) * dt, Math.abs(acc) * dt);
+      if (c.v < 0.01) c.v = 0;
+      c.braking = target < c.v - 0.3;
+      c.x += d[0] * c.v * dt; c.y += d[1] * c.v * dt;
+      c.heading = DIR_ANGLE[c.dir];
+      // 맵 끝에서 반대편으로 이동
+      const b = this.bounds;
+      if (c.x > b.x1 - 4 && c.dir === 'E') c.x = b.x0 + 4;
+      if (c.x < b.x0 + 4 && c.dir === 'W') c.x = b.x1 - 4;
+      if (c.y > b.y1 - 4 && c.dir === 'S') c.y = b.y0 + 4;
+      if (c.y < b.y0 + 4 && c.dir === 'N') c.y = b.y1 - 4;
+    }
+    // 구급차는 맵을 벗어나면 제거
+    if (this.ambulance) {
+      const a = this.ambulance;
+      if (a.x < this.bounds.x0 + 6 || a.x > this.bounds.x1 - 6 || a.y < this.bounds.y0 + 6 || a.y > this.bounds.y1 - 6) { this.ai = this.ai.filter((o) => o !== a); this.ambulance = null; }
+    }
+  }
+}
+
+// ---------------- 경로 탐색 (BFS/Dijkstra) ----------------
+const nodeAt = (i, j) => (i >= 0 && i < 3 && j >= 0 && j < 3 ? [i, j] : null);
+function step(node, dir) {
+  const v = DIRS[dir];
+  return nodeAt(node[0] + v[0], node[1] + v[1]);
+}
+// 현재 (직전 node, 진행 방향) 에서 목표 (node, 회전) 까지의 교차로 회전 목록
+function planRoute(fromNode, dir, goal) {
+  const key = (n, d) => n[0] + ',' + n[1] + ',' + d;
+  const q = [{ n: fromNode, d: dir, path: [] }];
+  const seen = new Set([key(fromNode, dir)]);
+  // 첫 이동: fromNode 에서 dir 방향 다음 노드로
+  while (q.length) {
+    const cur = q.shift();
+    const nxt = step(cur.n, cur.d);
+    if (!nxt) continue;
+    for (const turn of ['S', 'L', 'R']) {
+      const nd = turn === 'S' ? cur.d : turn === 'L' ? LEFT_OF[cur.d] : RIGHT_OF[cur.d];
+      const outNode = step(nxt, nd);
+      if (!outNode && !(nxt[0] === goal.node[0] && nxt[1] === goal.node[1])) continue;
+      const path = [...cur.path, { node: nxt, turn }];
+      if (nxt[0] === goal.node[0] && nxt[1] === goal.node[1] && (!goal.turn || goal.turn === turn)) return path;
+      const k = key(nxt, nd);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      q.push({ n: nxt, d: nd, path });
+    }
+  }
+  return null;
+}
+
+return { LANE_W, X, Y, ROW_TYPE, COL_TYPE, EXT, nLanes, halfLane, edgeHalf, limitOf, NODE_CTRL, SCHOOL, DIRS, DIR_ANGLE, LEFT_OF, RIGHT_OF, OPP, nodeBox, stopLinePos, dirFromHeading, RoadWorld, nodeAt, step, planRoute };
+})();
+
+// ===== js/sim/roadTest.js =====
+__m["js/sim/roadTest.js"] = (() => {
+// 제1종·제2종 보통 "도로주행시험" 시뮬레이션
+// 채점: 도로교통법 시행규칙 [별표 26] (46개 감점 항목, 70점 합격, 11개 실격 사유) → shared/rules.js
+const { Scorer, ROAD_ITEMS } = __m["js/shared/rules.js"];
+const {
+  RoadWorld, LANE_W, X, Y, nLanes, edgeHalf, stopLinePos, dirFromHeading, DIRS, DIR_ANGLE, LEFT_OF, RIGHT_OF, OPP,
+  NODE_CTRL, SCHOOL, planRoute, COL_TYPE, ROW_TYPE, step: stepNode,
+} = __m["js/sim/roadWorld.js"];
+const { polysOverlap, clamp, wrapAngle } = __m["js/sim/geom.js"];
+const { KMH } = __m["js/sim/vehicle.js"];
+
+const SLOW_KMH = 20;            // 서행 기준 속도 (교차로 좌·우회전, 비보호 교차로, 횡단보도 접근)
+const ROAD_TIME_LIMIT_SEC = 1500;
+const TURN_NAME = { L: '좌회전', R: '우회전', S: '직진' };
+
+// 시험 경로: 각 항목은 (node, 해당 교차로에서 할 동작)
+const ROUTE = [
+  { node: [1, 2], turn: 'L' },
+  { node: [1, 1], turn: 'S' },
+  { node: [1, 0], turn: 'R' },
+  { node: [2, 0], turn: 'R' },   // 정지표지 교차로 → 어린이보호구역(횡단보도) 방향
+  { node: [2, 1], turn: 'R' },
+  { node: [1, 1], turn: 'S' },
+  { node: [0, 1], turn: 'L' },   // 이후 길가장자리 정차 구간
+  { node: [0, 2], turn: 'L' },   // 비보호 교차로 → 종료 지점
+];
+
+const rectPoly = (o) => {
+  const c = Math.cos(o.heading), s = Math.sin(o.heading);
+  const hl = o.len / 2, hw = o.wid / 2;
+  return [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]].map(([a, b]) => [o.x + a * c - b * s, o.y + a * s + b * c]);
+};
+
+class RoadTest {
+  constructor({ veh, license = '2', seed = Date.now() % 100000, slot = 0 } = {}) {
+    this.kind = 'road';
+    this.veh = veh; this.license = license; this.seed = seed;
+    this.world = new RoadWorld(seed);
+    this.scorer = new Scorer('road');
+    this.t = 0; this.events = []; this.done = false;
+    this.phase = 'board'; // board → drive → pullover → restart → ending → finished
+    this.speaking = null;
+    this.looks = { left: -99, right: -99, rear: -99 };
+    this.objective = '문을 닫고 안전띠를 착용한 뒤 시동을 거세요';
+    this.scorer.onEvent((e) => this._push(e.type === 'dq' ? { type: 'dq', reason: e.reason } : { type: 'deduct', name: e.name, points: e.points, total: e.total, note: e.note }));
+    const z = this.world.zones.start;
+    veh.reset(z.x - (slot % 4) * 8, z.y, z.heading);
+    veh.slopeFn = () => [0, 0];
+    veh.doorClosed = false; veh.belt = false; veh.handbrake = true;
+    this.s = {
+      started: false, startCheckDone: false, moveStartT: null, instrEnd: 0, stalls: 0, startFails: 0, restartT: null,
+      doorFlag: false, stopT: 0, stopFlag: false, noBrakeT: 0, noBrakeFlag: false, slowT: 0, lowSpeedT: 0,
+      parkBrakeFlag: false, roughT: 0, lastLoc: null, lc: null, lcHist: [], signalOnAt: null, signalDir: null, signalOdo: 0,
+      lcCd: 0, laneKeepT: 0, laneKeepCd: 0, wrongT: 0, hardCd: 0, steerHist: [], steerCd: 0, thrFlips: [], lastThrState: null, gearCd: 0, ebT: 0, ebCd: 0,
+      prevAccel: 0, lastSpeed: 0, parkedFlag: new Set(), overT: 0, protT: 0, stripEntry: null, edge: { wasStrip: false, signalOk: true, enteredT: null, keepT: 0 },
+      box: null, lastBox: null, stopSign: {}, nodeVisited: [], pedCd: 0, ambDone: false, ambT: 0, ambPassed: false, pullDone: false, pullT: 0, pullState: 'idle',
+      endState: 'idle', cw: { flag: new Set() }, nextAnnounce: null, lastAnnounceNode: null, routeIdx: 0, curNode: null, lastDir: null, sigFlag: new Set(),
+    };
+    this.s.curNode = [0, 2]; this.s.lastDir = 'E';
+    this.plan = null;
+    this.hud = {};
+    this._say('시험을 시작합니다. 문을 닫고 안전띠를 착용한 뒤, 주변 안전을 확인하고 시동을 거세요.');
+  }
+
+  // ---------- 외부 API ----------
+  drainEvents() { const e = this.events; this.events = []; return e; }
+  look(side) { this.looks[side] = this.t; this._push({ type: 'look', side }); }
+  result() { const s = this.scorer.summary(); s.duration = Math.round(this.t); s.phase = this.phase; return s; }
+  _push(e) { this.events.push({ t: this.t, ...e }); }
+  _say(text, dur) { const d = dur ?? (1.0 + text.length * 0.085); this.speaking = { text, until: this.t + d }; this._push({ type: 'say', text, dur: d }); }
+  _ded(code, note, key) {
+    if (this.done) return;
+    this.scorer.deduct(code, this.t, note);
+  }
+  _dq(code, extra) { this.scorer.disqualify(code, this.t, extra); this._finish(); }
+  _toast(text, good = false) { this._push({ type: 'toast', text, good }); }
+
+  // ---------- 메인 ----------
+  update(dt) {
+    if (this.done) return;
+    const veh = this.veh, w = this.world, s = this.s;
+    this.t += dt;
+    const player = { x: veh.center()[0], y: veh.center()[1], len: veh.car.length, wid: veh.car.width, dir: dirFromHeading(veh.heading), heading: veh.heading, v: veh.v };
+    w.update(dt, player);
+    this._vehEvents(veh.popEvents());
+    if (this.done) return;
+    const c = veh.center();
+    const loc = w.locate(c[0], c[1]);
+    const kmh = veh.kmh;
+
+    if (this.t > ROAD_TIME_LIMIT_SEC) { this._dq('timeout'); return; }
+
+    // 안전띠: 주행 중 미착용 → 실격
+    if (veh.speed > 0.5 && !veh.belt && this.phase !== 'finished') { this._dq('noBelt'); return; }
+
+    if (this.phase === 'board') { this._board(dt); }
+    else {
+      this._driveRules(dt, loc, kmh);
+      if (this.done) return;
+      this._routeLogic(dt, loc);
+      this._events(dt, loc);
+      this._ending(dt, loc);
+    }
+    this._hud(loc, kmh);
+  }
+
+  _vehEvents(evs) {
+    const veh = this.veh, s = this.s;
+    for (const e of evs) {
+      if (e.type === 'engineStart') {
+        if (s.restartT !== null) s.restartT = null;
+        if (!veh.doorClosed && !s.doorFlag) { s.doorFlag = true; this._ded('doorOpen'); }
+      } else if (e.type === 'startFail') {
+        s.startFails++; this._toast(e.reason);
+        if (s.startFails >= 3) { this._dq('incompetent', '시동 3회 실패'); return; }
+      } else if (e.type === 'startWhileRunning') this._ded('restartRunning');
+      else if (e.type === 'stall') {
+        s.stalls++; this._ded('stall'); s.restartT = this.t; this._toast('시동이 꺼졌습니다. 다시 시동을 거세요');
+        if (s.stalls >= 5) { this._dq('incompetent', '엔진 정지 5회'); return; }
+      } else if (e.type === 'jerk') this._ded('vibration');
+      else if (e.type === 'overRev') { if (veh.kmh < 12) this._ded('roughStart', `${e.rpm}RPM`); }
+      else if (e.type === 'gearBlocked') this._toast(e.reason);
+      else if (e.type === 'grind') this._toast('클러치를 끝까지 밟고 변속하세요');
+      else if (e.type === 'handbrake' && !e.on) { if (!veh.doorClosed && !s.doorFlag && this.phase === 'board') { s.doorFlag = true; this._ded('doorOpen'); } }
+      else if (e.type === 'signal') this._onSignalEvent(e);
+      else if (e.type === 'belt' && !e.on && this.phase === 'finished') { /* 종료 처리됨 */ }
+      else if (e.type === 'belt' && !e.on && this.phase === 'ending') this._endingBelt();
+      else if (e.type === 'belt' && !e.on && veh.speed > 0.1) { this._dq('noBelt'); return; }
+    }
+  }
+
+  _onSignalEvent(e) {
+    const s = this.s, veh = this.veh;
+    if (!veh.doorClosed && this.phase === 'board' && !s.doorFlag) { s.doorFlag = true; this._ded('doorOpen'); }
+    if (e.side === 'off') {
+      // 차로 진입 전 소등
+      if (s.edge.wasStrip && !s.edge.done) { s.edge.signalOk = false; }
+      if (s.lc && !s.lc.completed) { if (!s.lc.dropFlag) { s.lc.dropFlag = true; this._ded('lcSignalDrop'); } }
+      s.signalOnAt = null; s.signalDir = null;
+    } else {
+      s.signalOnAt = veh.odo; s.signalDir = e.side;
+    }
+  }
+
+  // ---------- 출발 전 ----------
+  _board(dt) {
+    const veh = this.veh, s = this.s;
+    if (!s.started) {
+      this.objective = !veh.doorClosed ? '문을 닫으세요 (V)' : !veh.belt ? '안전띠를 착용하세요 (B)' : !veh.engineOn ? '주변 확인(J·K·L) 후 시동을 거세요 (T)' : '주차브레이크를 풀고 좌측 방향지시등을 켠 뒤 출발하세요';
+    }
+    if (veh.engineOn && veh.belt && !s.instrDone) {
+      s.instrDone = true;
+      this._say('출발하세요.');
+      s.instrEnd = this.t + this.speaking.until - this.t;
+      s.departCheckT = this.speaking.until;
+    }
+    if (s.instrDone && !s.started) {
+      if (!veh.doorClosed && veh.speed > 0.3 && !s.doorFlag) { s.doorFlag = true; this._ded('doorOpen'); }
+      // 출발 20초 이내
+      if (this.t > s.departCheckT + 20 && !s.slowFlag) { s.slowFlag = true; this._ded('slowStart'); }
+      if (veh.speed > 0.5) {
+        s.started = true; this.phase = 'drive';
+        s.moveStartT = this.t;
+        this._push({ type: 'phase', name: '주행 시작' });
+        // 승차 전 안전 확인 (좌·우·후방)
+        const need = ['left', 'right', 'rear'];
+        const ok = need.every((k) => this.t - this.looks[k] < 40);
+        if (!ok) this._ded('safetyCheck', '출발 전 좌·우·후방 확인 안 함');
+        if (veh.handbrake && !s.parkBrakeFlag) { s.parkBrakeFlag = true; this._ded('parkBrakeOn'); }
+        if (this.veh.v < 0) { /* 후진 출발은 허용 */ }
+      }
+    }
+  }
+
+  // ---------- 주행 규칙 ----------
+  _driveRules(dt, loc, kmh) {
+    const veh = this.veh, w = this.world, s = this.s;
+    const c = veh.center();
+    const heading = veh.heading;
+    const myDir = dirFromHeading(heading);
+
+    // 출발 후 주차브레이크
+    if (veh.handbrake && veh.speed > 1.2 && !s.parkBrakeFlag) { s.parkBrakeFlag = true; this._ded('parkBrakeOn'); }
+    // 재시동 10초
+    if (s.restartT !== null && !veh.engineOn && this.t - s.restartT > 10 && !s.restartFlag) { s.restartFlag = true; this._ded('restartFail'); }
+    if (veh.engineOn) { s.restartFlag = false; }
+    // 시동 꺼진 채 교차로 안
+    if (!veh.engineOn && loc.kind === 'box') { s.stalledBox = (s.stalledBox || 0) + dt; if (s.stalledBox > 3 && !s.stalledBoxFlag) { s.stalledBoxFlag = true; this._ded('blockTraffic'); } } else { s.stalledBox = 0; s.stalledBoxFlag = false; }
+    // 급출발: 정지 상태에서 급가속
+    if (veh.speed < 3 && veh.accel > 2.7 && veh.v > 0) { s.roughT += dt; if (s.roughT > 0.5 && !s.roughFlag) { s.roughFlag = true; this._ded('roughStart', '급출발'); } } else if (veh.speed < 0.1) { s.roughT = 0; s.roughFlag = false; }
+
+    // 속도 제한
+    const limit = loc.limit || 40;
+    if (loc.kind !== 'off') {
+      if (kmh > limit + 10) { s.overT += dt; if (s.overT > 0.4) { this._dq(loc.school ? 'protectedZone' : 'overSpeed10', `${Math.round(kmh)}km/h`); return; } } else s.overT = 0;
+      if (loc.school && kmh > SCHOOL.limit + 0.5) { s.protT += dt; if (s.protT > 0.5) { this._dq('protectedZone', `${Math.round(kmh)}km/h (보호구역 30km/h)`); return; } } else s.protT = 0;
+    }
+
+    // 정차 10초 이상 기어 중립
+    if (veh.speed < 0.1 && veh.engineOn) {
+      s.stopT += dt;
+      if (s.stopT > 10 && !s.stopFlag && s.started) {
+        s.stopFlag = true;
+        const neutralOk = veh.gear === 'N';
+        if (veh.trans === 'MT' && !neutralOk) this._ded('noNeutral', '10초 이상 정차');
+      }
+      // 일시정지 중 브레이크 미사용
+      if (veh.brakePedal < 0.1 && !veh.handbrake && s.started) { s.noBrakeT += dt; if (s.noBrakeT > 2 && !s.noBrakeFlag) { s.noBrakeFlag = true; if (veh.gear !== 'P') this._ded('noBrakeStop'); } } else s.noBrakeT = 0;
+    } else { s.stopT = 0; s.stopFlag = false; s.noBrakeT = 0; s.noBrakeFlag = false; }
+
+    // 현저한 저속 주행
+    const free = loc.kind === 'road' && !loc.inStrip && !this._nearStopCtrl(c, myDir) && !this._carAhead(c, myDir, 28) && this.phase === 'drive' && !loc.school;
+    if (free && veh.engineOn && veh.speed > 0.5 && kmh < limit * 0.4) { s.lowSpeedT += dt; if (s.lowSpeedT > 10) { s.lowSpeedT = 0; this._ded('tooSlow'); } } else s.lowSpeedT = Math.max(0, s.lowSpeedT - dt);
+
+    // 불필요한 급제동
+    s.hardCd = Math.max(0, s.hardCd - dt);
+    if (veh.accel < -4.8 && veh.speed > 3 && s.hardCd === 0 && veh.brakePedal > 0.6) {
+      if (!this._hazardAhead(c, myDir, 14)) { s.hardCd = 3; this._ded('hardBrake'); }
+    }
+
+    // 속도 불안정(가속/제동 반복)
+    {
+      const st = veh.brakePedal > 0.3 ? 'b' : veh.throttle > 0.3 ? 't' : null;
+      if (st && st !== s.lastThrState && kmh > 25) { s.thrFlips.push(this.t); if (s.lastThrState !== null) {} }
+      if (st) s.lastThrState = st;
+      s.thrFlips = s.thrFlips.filter((x) => this.t - x < 12);
+      if (s.thrFlips.length >= 7 && this.t - (s.thrCd || -99) > 15) { s.thrCd = this.t; s.thrFlips = []; this._ded('speedUnstable'); }
+    }
+    // 핸들 조작 미숙
+    {
+      s.steerCd = Math.max(0, s.steerCd - dt);
+      const sg = Math.sign(veh.steerAngle) * (Math.abs(veh.steerAngle) > 0.09 ? 1 : 0);
+      if (sg !== 0 && s.lastSteerSign && sg !== s.lastSteerSign && kmh > 22 && loc.kind === 'road') { s.steerHist.push(this.t); }
+      if (sg !== 0) s.lastSteerSign = sg;
+      s.steerHist = s.steerHist.filter((x) => this.t - x < 3);
+      if (s.steerHist.length >= 4 && s.steerCd === 0) { s.steerCd = 8; s.steerHist = []; this._ded('steering'); }
+    }
+    // 수동: 속도에 맞지 않는 기어 (회전수 과다 / 저단 고속 / 고단 저속)
+    if (veh.trans === 'MT' && veh.engineOn && typeof veh.gear === 'number') {
+      s.gearCd = Math.max(0, s.gearCd - dt);
+      const bad = (veh.rpm > 3600 && veh.clutchPedal < 0.2) || (veh.gear >= 4 && kmh < 22 && veh.clutchPedal < 0.2 && veh.throttle > 0.2) || (veh.gear === 1 && kmh > 30);
+      s.gearBadT = bad ? (s.gearBadT || 0) + dt : 0;
+      if (s.gearBadT > 1.5 && s.gearCd === 0) { s.gearCd = 12; s.gearBadT = 0; this._ded('wrongGear'); }
+    }
+    // 엔진 브레이크 미사용: 중립/클러치 밟고 타력주행
+    {
+      s.ebCd = Math.max(0, s.ebCd - dt);
+      const coast = kmh > 20 && ((veh.trans === 'AT' && veh.gear === 'N') || (veh.trans === 'MT' && (veh.gear === 'N' || veh.clutchPedal > 0.5)));
+      s.ebT = coast ? s.ebT + dt : 0;
+      if (s.ebT > 2.5 && s.ebCd === 0) { s.ebCd = 10; s.ebT = 0; this._ded('engineBrake'); }
+    }
+
+    // 차량·보행자 충돌 / 연석
+    if (this._collisions(c)) return;
+    // 중앙선 침범: 차량 중심이 반대 방향 차로에 있음
+    if (loc.kind === 'road' && veh.speed > 1.5 && !(loc.inStrip)) {
+      const wrong = loc.dir !== myDir && loc.dir !== OPP[myDir];
+      if (loc.dir === OPP[myDir]) { s.wrongT += dt; if (s.wrongT > 0.9) { this._dq('centerLine'); return; } } else s.wrongT = 0;
+    } else s.wrongT = 0;
+
+    // 차로 유지 (차선 접촉)
+    if (loc.kind === 'road' && !loc.inStrip && veh.speed > 3 && !s.lc && loc.dir === myDir && !veh.left && !veh.right && this.t - (s.edge.enteredT ?? -99) > 3) {
+      const laneC = (loc.lane - 0.5) * LANE_W;
+      const lat = loc.ad - laneC;
+      const half = veh.car.width / 2 + 0.05;
+      if (Math.abs(lat) + half > LANE_W / 2 + 0.05) {
+        // 중앙선 쪽(lane 1) 이탈은 중앙선 침범에 가까움, 바깥쪽은 차선 접촉
+        s.laneKeepT += dt;
+        if (s.laneKeepT > 0.35 && s.laneKeepCd === 0) { s.laneKeepCd = 4; this._ded('laneKeep'); }
+      } else s.laneKeepT = 0;
+    } else s.laneKeepT = 0;
+    s.laneKeepCd = Math.max(0, s.laneKeepCd - dt);
+
+    // 장애물(주차 차량)과의 옆 간격
+    this._sideGap(c);
+
+    // 차로 진입(길가장자리 → 차로) 방향지시등
+    this._edgeEntry(dt, loc);
+    // 차로 변경
+    this._laneChange(dt, loc, kmh, myDir);
+    s.lastLoc = loc;
+  }
+
+  _carAhead(c, dir, dist) {
+    const d = DIRS[dir];
+    for 
