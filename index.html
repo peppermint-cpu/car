@@ -1090,29 +1090,8 @@ function buildOutdoors(){
     for(const y of[.15,.9,1.7])tube(MT.rust,[hx,y,hz],[ex2,y,ez],.028,.028,5);
     for(let t=0;t<=1.001;t+=.12)tube(MT.rust,[hx+dx*1.7*t,.15,hz+dz*1.7*t],[hx+dx*1.7*t,1.7,hz+dz*1.7*t],.018,.018,4);}
 
-  // ---- torii + stone lanterns on the hillside north of the road
-  const RR=PM('torii',[.8,.1,.06],{spec:.35,gloss:36,bump:.01}),KK=PM('toriiK',[.025,.025,.03],{spec:.3,gloss:30});
-  {const cx=-20,cz=15,w2=2.0,h2=4.4;
-    for(const sx of[-1,1]){cylY(RR,cx+sx*w2,0,cz,.2,.17,h2,10);cylY(KK,cx+sx*w2,0,cz,.23,.23,.4,10)}
-    box(RR,cx-w2-.15,h2-1.0,cz-.09,cx+w2+.15,h2-.82,cz+.09);box(RR,cx-.16,h2-1.0,cz-.1,cx+.16,h2,cz+.1);
-    box(RR,cx-w2-.55,h2-.12,cz-.14,cx+w2+.55,h2+.05,cz+.14);box(KK,cx-w2-.8,h2+.05,cz-.22,cx+w2+.8,h2+.22,cz+.22);
-    const C=MT.conc,fm=PM('lanE',[1,.6,.25],{emis:2.2,spec:0,cast:false});
-    for(const lx of[cx-3.4,cx+3.4]){box(C,lx-.35,0,cz+1.2-.35,lx+.35,.18,cz+1.2+.35);cylY(C,lx,.18,cz+1.2,.13,.13,.9,8);box(C,lx-.3,1.08,cz+1.2-.3,lx+.3,1.18,cz+1.2+.3);
-      box(fm,lx-.16,1.18,cz+1.2-.16,lx+.16,1.5,cz+1.2+.16);box(C,lx-.4,1.5,cz+1.2-.4,lx+.4,1.62,cz+1.2+.4);box(C,lx-.28,1.62,cz+1.2-.28,lx+.28,1.75,cz+1.2+.28);sphere(C,lx,1.86,cz+1.2,.1,.1,.1,6,4);
-      addLight({x:lx,y:1.35,z:cz+1.6,range:6,r:1,g:.6,b:.28,k:.6,type:'warm'})}
-    for(let i=0;i<7;i++)box(C,cx-1.2,i*.2,cz-6-i*.9+9,cx+1.2,i*.2+.2,cz-5.1-i*.9+9);
-  }
-  // ---- vending machine (jidouhanbaiki) by the road
-  {const vx=-18,vz=24.6;
-    const vc=textCanvas(128,256,(x,w,h)=>{x.fillStyle='#dfe3e5';x.fillRect(0,0,w,h);const cl=['#c33','#2a7ab8','#3a9a55','#e8952a','#e8e8e8','#8a3ab5'];
-      for(let r=0;r<4;r++)for(let c=0;c<4;c++){x.fillStyle=cl[(r*3+c*2)%6];x.fillRect(9+c*28,14+r*40,20,32)}
-      x.fillStyle='#222';x.fillRect(9,182,110,44);x.fillStyle='#bfe6ff';x.font='bold 15px sans-serif';x.fillText('つめた〜い',18,210);x.fillStyle='#e33';x.fillRect(96,232,22,14);});
-    const vm=signMB('vend',vc);vm.emis=1.35;
-    box(PM('vendB',[.75,.78,.8],{spec:.4,gloss:40}),vx-.48,0,vz-.4,vx+.48,1.86,vz+.42);panel(vm,'pz',vz+.425,vx-.42,vx+.42,.14,1.78);
-    addCol(vx-.5,vz-.45,vx+.5,vz+.5,false);
-    addLight({x:vx,y:1.5,z:vz+.9,range:7,r:.85,g:.95,b:1,k:.95,type:'lamp'});}
   // world boundaries (invisible)
-  addCol(-112,-80,-6,24.7);addCol(-112,31.4,-56,70);addCol(-30,31.4,95,70);addCol(-112,-80,-106,70);addCol(88,-80,95,70);
+  addCol(-112,-80,-50,24.7);addCol(-50,-80,-31.4,21.4);addCol(-31.4,-80,-8.6,-10);addCol(-8.6,-80,-6,24.7);addCol(-112,31.4,-56,70);addCol(-30,31.4,95,70);addCol(-112,-80,-106,70);addCol(88,-80,95,70);
   addCol(-112,-80,95,-62);addCol(50.4,-20,60,24);addCol(-9,-80,-5.8,3);
   addCol(-9,24.6,-5.6,26);
   // yard walls
@@ -1209,6 +1188,191 @@ function buildPlayground(){
   WD.bikeLight=addLight({x:6.9,y:.5,z:25.0,range:3.2,r:1,g:.95,b:.75,k:1.1,type:'flick'});
   WD.bikeLight.box=[-1e4,-1e4,1e4,1e4];
   addObj(dynMB('bikelamp',{tex:'white',tint:[1,.95,.75],emis:4,spec:0},m=>{box(m,-.04,-.03,-.03,.04,.03,.03)}),7.0,.5,25.0,{cast:false});
+}
+
+/* ---- 42_places.js ---- */
+/* ================= places: shrine, shop, phone booth ================= */
+const SHR={cx:-20.5};
+function sugi(x,z,h,y0){
+  y0=y0||0;const SG=PM('sugi',[.42,.6,.42],{tex:'leaf',su:2,sv:2,spec:0,cast:false,bump:.02,cull:false});
+  cylY(MT.bark,x,y0,z,.42,.3,h*.5,7,{caps:false});
+  for(let k=0;k<3;k++){const yb=y0+h*(.2+k*.2),r=2.4-k*.5;tube(SG,[x,yb,z],[x,yb+h*.52,z],r,.05,8,{caps:false})}
+}
+function torii(cx,cz,w2,h2){
+  const RR=PM('torii',[.8,.1,.06],{spec:.35,gloss:36,bump:.01}),KK=PM('toriiK',[.025,.025,.03],{spec:.3,gloss:30});
+  for(const sx of[-1,1]){cylY(RR,cx+sx*w2,0,cz,.2,.17,h2,10);cylY(KK,cx+sx*w2,0,cz,.23,.23,.4,10)}
+  box(RR,cx-w2-.15,h2-1.0,cz-.09,cx+w2+.15,h2-.82,cz+.09);box(RR,cx-.16,h2-1.0,cz-.1,cx+.16,h2,cz+.1);
+  box(RR,cx-w2-.55,h2-.12,cz-.14,cx+w2+.55,h2+.05,cz+.14);box(KK,cx-w2-.8,h2+.05,cz-.22,cx+w2+.8,h2+.22,cz+.22);
+  // shimenawa
+  const SH=PM('shime',[.8,.72,.5],{tex:'cloth',su:1,sv:1,spec:0});
+  tube(SH,[cx-w2+.2,h2-1.25,cz+.02],[cx+w2-.2,h2-1.3,cz+.02],.07,.07,6);
+  for(let i=0;i<5;i++){const px=cx-w2+.8+i*(2*w2-1.6)/4;box(PM('shide',[1.2,1.2,1.15],{spec:0}),px-.05,h2-1.95,cz,px+.05,h2-1.3,cz+.01)}
+  addCol(cx-w2-.25,cz-.25,cx-w2+.25,cz+.25,false);addCol(cx+w2-.25,cz-.25,cx+w2+.25,cz+.25,false);
+}
+function lantern(x,z,sc){
+  const C=PM('stoneL',[1.15,1.15,1.1],{tex:'conc',su:2.4,sv:2.4,bump:.02,spec:.04}),fm=PM('lanE',[1,.6,.25],{emis:2.2,spec:0,cast:false});
+  box(C,x-.35,0,z-.35,x+.35,.18,z+.35);cylY(C,x,.18,z,.13,.13,.9,8);box(C,x-.3,1.08,z-.3,x+.3,1.18,z+.3);
+  box(fm,x-.16,1.18,z-.16,x+.16,1.5,z+.16);box(C,x-.4,1.5,z-.4,x+.4,1.62,z+.4);box(C,x-.28,1.62,z-.28,x+.28,1.75,z+.28);sphere(C,x,1.86,z,.1,.1,.1,6,4);
+  addCol(x-.38,z-.38,x+.38,z+.38,false);
+  return addLight({x:x,y:1.35,z:z+.5,range:6,r:1,g:.6,b:.28,k:.6,type:'warm'});
+}
+function komainu(x,z,flip){
+  const C=PM('stoneK',[1,1,.96],{tex:'conc',su:2.4,sv:2.4,bump:.03,spec:.04});
+  box(C,x-.4,0,z-.4,x+.4,.45,z+.4);box(C,x-.28,.45,z-.2,x+.28,1.0,z+.35);sphere(C,x,1.1,z+.12,.3,.28,.28,8,6,{noise:.05,seed:3});
+  box(C,x-.1,.8,z+.34,x+.1,.96,z+.55);box(C,x-.28,.45,z-.38,x+.28,.8,z-.2);
+  addCol(x-.42,z-.42,x+.42,z+.42,false);
+}
+function gable(x0,x1,z0,z1,y0,yr,ov,roofMB,wallMB){
+  const zm=(z0+z1)/2;
+  qd(roofMB,[x1+ov,y0,z1+ov],[x0-ov,y0,z1+ov],[x0-ov,yr,zm],[x1+ov,yr,zm],[0,1,1]);
+  qd(roofMB,[x0-ov,y0,z0-ov],[x1+ov,y0,z0-ov],[x1+ov,yr,zm],[x0-ov,yr,zm],[0,1,-1]);
+  box(MT.metalD,x0-ov,yr-.08,zm-.12,x1+ov,yr+.1,zm+.12);
+  wallMB.tri([[x0,y0,z1+ov*.2],[x0,y0,z0-ov*.2],[x0,yr-.08,zm]],[-1,0,0],[[0,0],[3,0],[1.5,1.7]],1);
+  wallMB.tri([[x1,y0,z0-ov*.2],[x1,y0,z1+ov*.2],[x1,yr-.08,zm]],[1,0,0],[[0,0],[3,0],[1.5,1.7]],1);
+}
+function buildShrine(){
+  const cx=SHR.cx,G0=PM('gravel',[1.45,1.42,1.35],{tex:'dirt',su:1.6,sv:1.6,bump:.03,spec:.03});
+  // ground: packed earth plaza and gravel approach
+  flat(MT.dirt,-32,-10,-9,24.5,.026);flat(G0,cx-1.8,-1.2,cx+1.8,24.5,.034);flat(G0,cx-6,-1.2,cx+6,2.2,.034);
+  // wooded hill behind the shrine
+  const HL=PM('hill',[.045,.08,.055],{tex:'leaf',su:8,sv:8,spec:0,cast:false,bump:.01});
+  const hc=[-20,-44,40,26,32];
+  sphere(HL,hc[0],0,hc[1],hc[2],hc[3],hc[4],20,12,{noise:.1,seed:3});
+  for(let i=0;i<70;i++){const x=hc[0]+(RW()*2-1)*(hc[2]-4),z=-12-RW()*30,ins=1-((x-hc[0])/hc[2])**2-((z-hc[1])/hc[4])**2;if(ins<.08)continue;sugi(x,z,11+RW()*7,hc[3]*Math.sqrt(ins)-.6)}
+  // cedar rows along the sides and rear
+  for(let z=23;z>-10;z-=3.6){for(const sx of[-30.4,-10.4]){const x=sx+(RW()-.5)*1.1,zz=z+(RW()-.5)*1.2;sugi(x,zz,14+RW()*5);addCol(x-.5,zz-.5,x+.5,zz+.5,false)}}
+  for(let x=-30;x<-10;x+=3.4){const zz=-9.6+(RW()-.5);sugi(x+(RW()-.5),zz,15+RW()*5)}
+  // gate and approach
+  torii(cx,23.2,2.1,4.5);
+  WD.shrineLights=[];
+  for(const[lx,lz]of[[cx-3.1,19],[cx+3.1,19],[cx-3.1,10.5],[cx+3.1,10.5]])WD.shrineLights.push(lantern(lx,lz));
+  // second, smaller torii
+  torii(cx,15.2,1.5,3.4);
+  // handwashing pavilion (temizuya)
+  {const x=-27,z=13,C=PM('stoneL',[1.15,1.15,1.1],{tex:'conc',su:2.4,sv:2.4,bump:.02,spec:.04});
+    box(C,x-.9,0,z-.6,x+.9,.8,z+.6);box(PM('water',[.02,.03,.04],{spec:2,gloss:100,cast:false}),x-.75,.78,z-.45,x+.75,.8,z+.45);
+    for(const[dx,dz]of[[-1.1,-.8],[1.1,-.8],[-1.1,.8],[1.1,.8]])cylY(MT.woodD,x+dx,0,z+dz,.07,.07,2.4,6);
+    gable(x-1.3,x+1.3,z-1.0,z+1.0,2.4,3.1,.3,MT.roof,MT.woodD);
+    tube(MT.woodL,[x+.4,.8,z+.1],[x+1.0,.9,z-.1],.012,.012,4);box(MT.woodL,x+1.0,.88,z-.15,x+1.12,.92,z-.05);
+    addCol(x-1.0,z-.7,x+1.0,z+.7,false);}
+  // komainu
+  komainu(cx-2.7,5.2);komainu(cx+2.7,5.2);
+  // haiden (main worship hall)
+  {const x0=-26,x1=-15,z0=-7,z1=-1.6,fy=.8,W=PM('shrW',[.5,.42,.36],{tex:'wood',su:1.2,sv:1.2,bump:.01,spec:.2});
+    box(PM('stoneL',[1.15,1.15,1.1],{tex:'conc',su:2.4,sv:2.4,bump:.02,spec:.04}),x0-.3,0,z0-.3,x1+.3,.35,z1+.3);
+    box(MT.woodL,x0,.35,z0,x1,fy,z1);
+    box(W,x0,fy,z0,x1,fy+2.9,z0+.2);box(W,x0,fy,z0,x0+.2,fy+2.9,z1);box(W,x1-.2,fy,z0,x1,fy+2.9,z1);
+    for(const px of[x0+.1,-22.4,-18.6,x1-.1])cylY(MT.woodD,px,fy,z1-.15,.15,.14,3.0,8);
+    box(MT.woodD,x0,fy+2.8,z1-.3,x1,fy+3.05,z1);
+    gable(x0,x1,z0,z1,fy+3.05,fy+5.2,.9,MT.roof,MT.woodD);
+    // steps
+    for(let i=0;i<3;i++)box(PM('stoneL',[1.15,1.15,1.1],{tex:'conc',su:2.4,sv:2.4,bump:.02,spec:.04}),cx-1.7,i*.12,z1+.95-i*.3,cx+1.7,i*.12+.12,z1+1.25-i*.3);
+    // offering box & bell rope
+    box(MT.woodD,cx-.6,fy,z1-.9,cx+.6,fy+.5,z1-.3);for(let i=0;i<9;i++)box(MT.woodL,cx-.55+i*.12,fy+.5,z1-.9,cx-.45+i*.12,fy+.52,z1-.3);
+    sphere(MT.brass,cx,fy+2.3,z1-.55,.17,.17,.17,10,8);
+    const rp=PM('rope',[.85,.8,.7],{tex:'cloth',su:1,sv:1,spec:0});tube(rp,[cx-.05,fy+2.15,z1-.55],[cx-.05,fy+1.1,z1-.5],.03,.03,6);tube(rp,[cx+.05,fy+2.15,z1-.55],[cx+.05,fy+1.1,z1-.5],.03,.03,6);
+    box(PM('redcl',[.7,.06,.05],{tex:'cloth',su:1,sv:1,spec:0}),cx-.12,fy+1.0,z1-.55,cx+.12,fy+1.3,z1-.5);
+    // inner mirror
+    sphere(MT.brass,cx,fy+1.3,z0+.25,.38,.38,.03,12,8);
+    addCol(x0-.3,z0-.3,x1+.3,z1-.7,false);addCol(cx-1.7,z1-.7,cx+1.7,z1+.05,false);
+    WD.shrineHall=[x0,z0,x1,z1];
+  }
+  // ema rack
+  {const x=-28.6,z0=8.6,z1=12.6;
+    for(const zz of[z0,z1])cylY(MT.woodD,x,0,zz,.07,.07,2.3,6);
+    box(MT.woodD,x-.06,2.2,z0-.1,x+.06,2.3,z1+.1);box(MT.woodD,x-.04,1.0,z0,x+.04,1.06,z1);
+    const r=rng(9);for(let i=0;i<22;i++){const zz=z0+.2+(i%11)*.34,yy=i<11?1.9:1.25;if(Math.abs(zz-10.2)<.15&&i>=11)continue;
+      box(PM('ema',[1.2,.95,.7],{tex:'wood',su:.6,sv:.6,spec:.1}),x+.07,yy-.17+r()*.03,zz-.11,x+.1,yy+.1,zz+.11)}
+    addCol(x-.2,z0-.2,x+.2,z1+.2,false);}
+  // shamusho (small amulet hut)
+  {const x0=-14.2,x1=-10.6,z0=4.4,z1=7.8,H=2.7,W=PM('hutW',[.62,.58,.5],{tex:'wood',su:1.2,sv:1.2,bump:.01,spec:.15});
+    box(W,x0,0,z0,x1,H,z1);box(PM('stoneL',[1.15,1.15,1.1],{tex:'conc',su:2.4,sv:2.4,bump:.02,spec:.04}),x0-.2,0,z0-.2,x1+.2,.12,z1+.2);
+    gable(x0,x1,z0,z1,H,H+1.1,.45,MT.roof,W);
+    // counter window facing the path (-x side)
+    box(MT.woodD,x0-.5,.95,z0+.7,x0,1.05,z1-.7);panel(PM('hutwin',[.02,.02,.025],{cast:false}),'nx',x0-.002,z0+.8,z1-.8,1.05,2.0);
+    box(PM('lanE',[1,.6,.25],{emis:2.2,spec:0,cast:false}),x0-.01,2.15,z0+1.5,x0+.06,2.45,z0+2.0);
+    tube(MT.woodD,[x0-.5,2.1,z0+.7],[x0-.5,2.1,z1-.7],.02,.02,4);
+    addCol(x0-.55,z0-.1,x1+.1,z1+.1,false);
+    WD.shamusho=[x0,z0,x1,z1];
+    WD.it.omamori=addObj(dynMB('omamori',{tex:'cloth',su:1,sv:1,emis:.35,spec:.05,tint:[1.5,.25,.2]},m=>{box(m,-.04,-.08,-.01,.04,.08,.01);box(PM('omaG',[.9,.75,.2]),-.008,.08,-.01,.008,.14,.01)}),x0-.1,1.2,z0+1.7,{cast:false,m:M4.trs(x0-.1,1.2,z0+1.7,1.57,0,0,1)});
+  }
+}
+function buildShop(){
+  // 1999 dagashiya (sweets shop) closed down, with an old drink machine and a public phone beside it
+  {const x0=-44,x1=-36,z0=14,z1=21.5,H=3.3;
+    flat(MT.dirt,-50,12,-31.4,24.5,.024);
+    box(MT.extW,x0,0,z0,x1,H,z1);
+    gable(x0,x1,z0,z1,H,H+1.3,.5,MT.roof,MT.extW);
+    const sh=PM('shutter',[.5,.56,.5],{tex:'metal',su:1.4,sv:1.4,spec:.5,gloss:30,bump:.03});
+    panel(sh,'pz',z1+.02,x0+.9,x1-.9,.1,2.5);
+    box(MT.woodD,x0+.8,.0,z1,x0+.9,2.6,z1+.05);box(MT.woodD,x1-.9,.0,z1,x1-.8,2.6,z1+.05);
+    const sg=signMB('sg_shop',signCanvas('駄菓子　かき氷',512,96,'#e8dcb8','#2a2a22','bold 52px serif'));panel(sg,'pz',z1+.04,x0+.6,x1-.6,2.65,3.2);
+    // ice flag
+    const fl=signMB('flag',textCanvas(64,192,(x,w,h)=>{x.fillStyle='#f0eee6';x.fillRect(0,0,w,h);x.strokeStyle='#2a6aa8';x.lineWidth=3;for(let i=0;i<4;i++){x.beginPath();x.moveTo(6,150+i*10);x.bezierCurveTo(20,140+i*10,44,160+i*10,58,150+i*10);x.stroke()}
+      x.fillStyle='#c2281e';x.font='bold 46px '+JP;x.textAlign='center';x.textBaseline='middle';x.fillText('氷',w/2,70)}));fl.cull=false;fl.cast=false;
+    cylY(MT.woodD,x1-.5,0,z1+1.0,.05,.05,3.2,6);panel(fl,'pz',z1+1.0,x1-.95,x1-.55,1.0,2.9);
+    // bench
+    box(MT.woodL,x0+1.2,.42,z1+.5,x0+3.2,.48,z1+1.0);for(const bx of[x0+1.3,x0+3.0])box(MT.woodD,bx,0,z1+.55,bx+.1,.42,z1+.95);
+    addCol(x0-.2,z0-.2,x1+.2,z1+.2,true);addCol(x0+1.1,z1+.45,x0+3.3,z1+1.05,false);
+    // vending machine at the side of the shop
+    const vx=-34.9,vz=21.0;
+    const vc=textCanvas(128,256,(x,w,h)=>{x.fillStyle='#dfe3e5';x.fillRect(0,0,w,h);const cl=['#c33','#2a7ab8','#3a9a55','#e8952a','#e8e8e8','#8a3ab5'];
+      for(let r=0;r<4;r++)for(let c=0;c<4;c++){x.fillStyle=cl[(r*3+c*2)%6];x.fillRect(9+c*28,14+r*40,20,32)}
+      x.fillStyle='#222';x.fillRect(9,182,110,44);x.fillStyle='#bfe6ff';x.font='bold 15px sans-serif';x.fillText('つめた〜い',18,210);x.fillStyle='#e33';x.fillRect(96,232,22,14)});
+    const vm=signMB('vend',vc);vm.emis=1.35;
+    box(PM('vendB',[.75,.78,.8],{spec:.4,gloss:40}),vx-.48,0,vz-.4,vx+.48,1.86,vz+.42);panel(vm,'pz',vz+.425,vx-.42,vx+.42,.14,1.78);
+    addCol(vx-.5,vz-.45,vx+.5,vz+.5,false);
+    WD.vendLight=addLight({x:vx,y:1.5,z:vz+1.0,range:7,r:.85,g:.95,b:1,k:.95,type:'flick'});
+  }
+  // public phone booth
+  {const px=-33.0,pz=23.0,GL=PM('boothG',[.04,.07,.06],{blend:true,alpha:.3,cull:false,cast:false,spec:.8,gloss:80}),FR=PM('boothF',[.12,.3,.16],{spec:.4,gloss:40});
+    box(FR,px-.5,0,pz-.5,px-.44,2.1,pz+.5);box(FR,px+.44,0,pz-.5,px+.5,2.1,pz+.5);box(FR,px-.5,0,pz-.5,px+.5,2.1,pz-.44);box(FR,px-.5,2.05,pz-.5,px+.5,2.15,pz+.5);
+    box(FR,px-.5,0,pz+.44,px+.5,.12,pz+.5);box(FR,px-.5,1.0,pz+.44,px+.5,1.06,pz+.5);
+    panel(GL,'pz',pz+.47,px-.44,px+.44,1.06,2.05);panel(GL,'nx',px-.47,pz-.44,pz+.44,.12,2.05);panel(GL,'px',px+.47,pz-.44,pz+.44,.12,2.05);
+    const PH=PM('phoneG',[.12,.35,.2],{spec:.5,gloss:40});box(PH,px-.2,1.0,pz-.42,px+.2,1.55,pz-.2);
+    box(PM('phoneK',[.04,.04,.04]),px-.14,1.1,pz-.2,px+.14,1.3,pz-.19);tube(PM('phoneW',[.05,.05,.05]),[px-.24,1.45,pz-.3],[px-.24,1.5,pz-.3],.035,.035,6);
+    box(PM('phoneW',[.05,.05,.05]),px-.28,1.25,pz-.34,px-.2,1.6,pz-.26);
+    box(PM('lanE',[1,.6,.25],{emis:1.2,spec:0,cast:false}),px-.12,1.9,pz-.46,px+.12,2.0,pz-.44);
+    addCol(px-.52,pz-.52,px+.52,pz+.52,false);
+    WD.phoneLight=addLight({x:px,y:1.9,z:pz+.2,range:3.2,r:1,g:.95,b:.8,k:.3,type:'flick'});
+    WD.phonePos=[px,pz+.9];
+  }
+}
+function placeInteractions(){
+  const I=WD.inter;
+  I.push({id:'shopnote',x:-40,y:1.4,z:21.6,r:3.3,label:'붙어 있는 안내문 읽기',obj:null});
+  I.push({id:'vend',x:-34.9,y:1.1,z:21.4,r:2.4,label:'자판기 살펴보기',obj:null});
+  I.push({id:'phone',x:-33.0,y:1.3,z:23.4,r:2.3,label:'공중전화',obj:null});
+  I.push({id:'temizu',x:-27,y:1.0,z:13.6,r:2.4,label:'손 씻는 곳 살펴보기',obj:null});
+  I.push({id:'ema1',x:-28.3,y:1.75,z:9.2,r:2.2,label:'에마 읽기',obj:null});
+  I.push({id:'ema2',x:-28.3,y:1.1,z:10.6,r:2.2,label:'에마 읽기',obj:null});
+  I.push({id:'bell',x:SHR.cx,y:1.7,z:-1.3,r:2.6,label:'방울 울리기',obj:null});
+  I.push({id:'saisen',x:SHR.cx,y:1.2,z:-1.2,r:2.2,label:'새전함 살펴보기',obj:null});
+  I.push({id:'omamori',x:WD.shamusho[0]-.1,y:1.2,z:WD.shamusho[1]+1.7,r:2.3,label:'부적 가져가기',obj:WD.it.omamori});
+  I.push({id:'geta',x:1.15,y:1.0,z:1.6,r:2.2,label:'신발장 살펴보기',obj:null});
+  I.push({id:'kokkuri',x:14.7,y:.75,z:-6.25,r:1.9,label:'종이 살펴보기',obj:null});
+}
+/* ---- kokkuri paper, coin, shoe-locker tag ---- */
+const KK={cx:14.7,cz:-6.25,y:.742,pts:{}};
+function buildExtras(){
+  const cv=textCanvas(512,360,(x,w,h)=>{
+    x.fillStyle='#d8cfae';x.fillRect(0,0,w,h);const r=rng(5);for(let i=0;i<50;i++){x.fillStyle='rgba(90,70,30,'+r()*.12+')';x.beginPath();x.ellipse(r()*w,r()*h,5+r()*40,3+r()*14,0,0,TAU);x.fill()}
+    x.fillStyle='#8c1f1a';x.strokeStyle='#8c1f1a';x.textAlign='center';x.textBaseline='middle';
+    x.font='bold 40px '+JP;x.fillText('はい',70,50);x.fillText('いいえ',442,50);
+    x.lineWidth=7;x.beginPath();x.moveTo(214,72);x.lineTo(214,32);x.lineTo(298,32);x.lineTo(298,72);x.moveTo(206,40);x.lineTo(306,40);x.moveTo(214,52);x.lineTo(298,52);x.stroke();
+    x.fillStyle='#2a1a12';x.font='bold 34px '+JP;
+    const rows=['あいうえおかきくけこ','さしすせそたちつてと','らりるれろわをんはい'];rows.forEach((s,j)=>{[...s].forEach((c,i)=>x.fillText(c,46+i*47,140+j*65))});
+    x.font='bold 26px '+JP;[...'0123456789'].forEach((c,i)=>x.fillText(c,46+i*47,335));
+    x.strokeStyle='rgba(60,30,20,.5)';x.lineWidth=2;x.strokeRect(8,8,w-16,h-16)});
+  const mb=signMB('kokku',cv);
+  mb.quad([[KK.cx-.2,KK.y,KK.cz+.14],[KK.cx+.2,KK.y,KK.cz+.14],[KK.cx+.2,KK.y,KK.cz-.14],[KK.cx-.2,KK.y,KK.cz-.14]],[0,1,0],[[0,1],[1,1],[1,0],[0,0]],1);
+  const at=(px,py)=>[KK.cx-.2+px/512*.4,KK.cz-.14+py/360*.28];
+  KK.pts={start:at(70,50),tori:at(256,52),u:at(140,140),shi:at(93,205),ro:at(234,270),yes:at(70,50)};
+  KK.pos=[KK.pts.yes[0],KK.pts.yes[1]];
+  const coin=dynMB('coin',{tex:'white',tint:[.9,.62,.2],spec:1.3,gloss:60},m=>{tube(m,[0,0,0],[0,.004,0],.014,.014,12)});
+  WD.coin=addObj(coin,KK.pos[0],KK.y+.001,KK.pos[1],{cast:false,m:M4.trs(KK.pos[0],KK.y+.001,KK.pos[1],0,0,0,1)});
+  // her shoe locker tag
+  const tg=signMB('geta_tag',signCanvas('さえ',96,48,'#2a2a2a','#d9d2bc','bold 30px serif'));panel(tg,'px',.56,1.72,1.98,.82,.98);
 }
 
 /* ---- 45_school.js ---- */
@@ -1332,7 +1496,7 @@ function buildSchool(){
   {
     const[x0,x1]=rooms.cls;
     const xs=[7.0,9.6,11.3,13.0,14.7],zs=[-7.2,-6.25,-5.3,-4.35,-3.4,-2.45,-1.5];
-    xs.forEach((cx,ci)=>{zs.forEach((cz,ri)=>{if(RW()<.07&&!(ci===3&&ri===1))return;deskSet(cx,cz,{noChair:RW()<.1&&!(ci===3&&ri===1)})});addCol(cx-.27,-7.7,cx+.72,-1.0,false)});
+    xs.forEach((cx,ci)=>{zs.forEach((cz,ri)=>{if(RW()<.07&&!((ci===3||ci===4)&&ri===1))return;deskSet(cx,cz,{noChair:RW()<.1&&!((ci===3||ci===4)&&ri===1)})});addCol(cx-.27,-7.7,cx+.72,-1.0,false)});
     box(MT.woodD,5.4,0,-2.6,6.2,.78,-1.4);addCol(5.3,-2.7,6.3,-1.3,false);
     // blackboard
     const bd=new MB('board',{tex:'board',su:1,sv:1,spec:.05,cast:false,bump:.01});WD.board=bd;panel(bd,'px',5.31,-6.35,-1.95,.85,2.05);
@@ -1733,7 +1897,7 @@ function ghostUpdate(dt){
     GH.stepT-=dt*(sp>.3?1:0);if(GH.stepT<=0&&sp>.3){GH.stepT=.78/Math.max(.8,GH.cfg.speed*.9);AU.step('wet',1.1,[GH.x,.1,GH.z])}
     GH.whT-=dt;if(GH.whT<=0){GH.whT=5+Math.random()*6;AU.whisper([GH.x,1.3,GH.z],.8)}
     if(GH.litT>GH.cfg.litMax){AU.wail([GH.x,1.3,GH.z]);G.glitch=1;ghostVanish(false);GH.timer=GH.cfg.resp[0]+Math.random()*(GH.cfg.resp[1]-GH.cfg.resp[0]);}
-    else if(pd<1.05&&G.mode==='play'&&!G.indoorSafe)playerCaught();
+    else if(pd<1.05&&G.mode==='play'&&!G.indoorSafe){if(F.omamori&&!F.omamoriUsed)omamoriSave();else playerCaught()}
   }
   if(GH.hunt&&GH.mode==='off'&&G.mode==='play'&&G.inSchool){GH.timer-=dt;if(GH.timer<=0){if(!ghostSpawnHunt())GH.timer=3}}
   // pose / transforms
@@ -1749,6 +1913,19 @@ function ghostUpdate(dt){
     O.face.emis=GH.mode==='scare'?.5:.12;
   }
   const L=GH.light;L.x=GH.x;L.z=GH.z;L.y=1.3;L.k=GH.fade*(GH.mode==='scare'?1.2:.55)*(1+.25*Math.sin(GH.t*13));
+}
+
+function omamoriSave(){
+  F.omamoriUsed=1;G.flashW=1;G.glitch=1;G.shake=.6;AU.tone({f:1400,f2:300,d:.5,v:.12,type:'sawtooth',lp:3000});AU.wail([GH.x,1.3,GH.z]);
+  ghostVanish(false);GH.timer=GH.cfg.resp[1]+10;
+  later(.9,()=>{G.shake=0;say('품 안의 부적이 소리 없이 찢어져 있었다.');say('한 번뿐이었던 모양이다.')});
+}
+function ghostJump(dist,behind,done){
+  const P=G.pos,s=behind?-1:1,fx=Math.sin(G.yaw)*s,fz=-Math.cos(G.yaw)*s;
+  G.mode='cut';TOUCH.mv.id=TOUCH.lk.id=null;stickHide();
+  GH.mode='scare';GH.hold=true;GH.fade=1;GH.t=0;GH.face=true;GH.x=P[0]+fx*dist;GH.z=P[2]+fz*dist;GH.y=0;GH.yaw=Math.atan2(P[0]-GH.x,P[2]-GH.z);
+  G.yawTarget=Math.atan2(GH.x-P[0],-(GH.z-P[2]));G.pitchTarget=.3;G.shake=1;G.flashW=1;G.glitch=1;G.fearB=1;AU.scream();
+  later(1.5,()=>{GH.mode='off';GH.hold=false;GH.fade=0;GH.face=false;G.yawTarget=null;G.pitchTarget=null;G.shake=0;G.mode='play';if(done)done()});
 }
 
 /* ---- 70_game.js ---- */
@@ -1791,9 +1968,14 @@ function exitFS(){try{if(document.exitFullscreen)document.exitFullscreen();else 
 /* ---------- story text ---------- */
 const NOTE={
  gma:['관리인 할머니의 쪽지','해 지면 학교 쪽으로 가지 마라.\n사에 몫 수박은 따로 담아 뒀으니 그건 손대지 말고.\n\n나는 먼저 잔다.\n문단속 잘 하고, 밤에 무슨 소리가 나도 대답하지 마라.'],
- tae:['켄타의 쪽지','야, 오늘 밤 열두 시에 폐교 정문 앞이다.\n사에 얘기 알지? 안 오면 겁쟁이 인정하는 거다.\n손전등 꼭 챙겨 와.\n\n— 켄타\n\n추신. 너 작년 일은 기억 안 난다고 했지?\n가 보면 기억날걸.'],
+ tae:['켄타의 쪽지','야, 오늘 밤 열두 시에 폐교 정문 앞이다.\n사에 얘기 알지? 안 오면 겁쟁이 인정하는 거다.\n손전등 꼭 챙겨 오고,\n가는 길에 신사 들러서 부적 하나 받아 와.\n에마도 한번 읽어 봐라.\n\n— 켄타\n\n추신. 너 작년 일은 기억 안 난다고 했지?\n가 보면 기억날걸.'],
  d1:['사에의 일기 ①','1999년 7월 20일 화요일, 맑음.\n\n오늘은 종업식. 청소 당번이라 나만 남았다.\n애들이 걸레를 이과실 준비실에 갖다 놓으라고 해서 갔는데, 등 뒤에서 문이 닫혔다.\n\n철컥, 열쇠 돌아가는 소리가 났다.\n\n장난이겠지. 금방 열어 주겠지.\n장난 그만하고 문 열어 줘.'],
  d2:['사에의 일기 ②','7월 22일 목요일.\n\n창문이 없다. 수돗물은 나온다.\n처음엔 소리를 질렀는데 이제 목이 아프다.\n학교가 이렇게 조용한 줄 몰랐다. 매미 소리만 들린다.\n\n어제는 누가 문 앞에 한참 서 있었다. 숨소리가 들렸다.\n열어 달라고 했더니 발소리가 멀어졌다.\n\n그 애는 내 이름을 안다.'],
+ ema1:['에마 — 사에','새 학기에는 도쿄에서 온 케이랑\n진짜 친구가 될 수 있게 해 주세요.\n\n6학년 2반 사에\n1999년 7월 18일'],
+ ema2:['에마 — 켄타','그날 일이 없던 일이 되게 해 주세요.\n사에, 미안하다.\n\n켄타\n1999년 8월 3일'],
+ geta:['신발장 속의 쪽지','케이에게\n\n종업식 끝나고 청소가 끝나면 신사 뒷산에 같이 가자.\n매미 허물 많이 모아 둘게. 약속이다!\n\n— 사에'],
+ shop:['폐점 안내','오랫동안 이용해 주셔서 감사했습니다.\n1999년 8월 말일로 영업을 마칩니다.\n\n여름방학 내내 가게 앞에서 놀던 아이들에게도\n인사를 전합니다.\n\n※ 요즘 밤마다 가게 앞 공중전화가 울립니다.\n   받지 마십시오.\n\n— 주인 올림'],
+ kok:['코쿠리상의 종이','오십음표 위에 10엔 동전이 올려져 있다.\n"はい" 위의 동전 곁에 손가락 자국이 남아 있다.\n\n종업식 날 몰래 코쿠리상을 하던 아이들이 있었다고 한다.\n불러낸 것을 끝내 돌려보내지 않으면, 그것은 돌아가지 않는다.'],
  clip:['신문 스크랩 — 1999. 9. 3.','미카즈키초 6학년 여학생, 방학 중 교내 이과 준비실에서 숨진 채 발견\n\n경찰은 종업식 날 청소 당번이던 사에 양(12)을 같은 반 학생 4명이 장난으로 가둔 뒤 방치한 것으로 보고 있다. 방학 중에는 교내를 찾는 사람이 없어 발견이 늦어졌다.\n\n조사를 받은 학생 중에는 방학을 맞아 도쿄에서 시골집으로 내려와 있던 전학생 K군(12)도 포함되었다. K군은 열쇠를 쥔 채 아무 말도 하지 못했다고 한다.\n\n학교는 이듬해 폐교가 결정되었다.']
 };
 
@@ -1806,12 +1988,13 @@ function boot(){
   steps.push(['extras',()=>{drawExtras();TEXG.grassCard=glTex(TEXC.grassCard);TEXG.face=glTex(TEXC.face);TEXG.scratch=glTex(TEXC.scratch)}]);
   steps.push(['world',()=>{defMats();buildOutdoors();buildHouse();buildPlayground()}]);
   steps.push(['school',()=>{buildSchool();buildItems()}]);
+  steps.push(['places',()=>{buildShrine();buildShop();buildExtras();placeInteractions()}]);
   steps.push(['dyn',()=>{
     BOARDC=makeBoardCanvas();TEXG.board=glTex(BOARDC);TVC=textCanvas(64,64,()=>{});TVX=TVC.getContext('2d');TEXG.tv=glTex(TVC,{clamp:true,mip:false});
     buildGhost();buildVM();
     for(const d of[WD.dClass,WD.dMed,WD.dSci,WD.dOff])WD.inter.push({id:'door:'+d.id,x:d.hx+d.len/2,y:1.2,z:d.hz,r:1.9,label:'문 열기',door:d,enabled:()=>d.ang<.4&&!d.hidden});
     WD.inter.push({id:'sohee',x:44.6,y:1.0,z:2.5,r:2.8,label:'다가간다',obj:null,enabled:()=>F.final&&!F.choice});
-    WD.gateBlock=addCol(-47.2,30.6,-40.8,31.6,false);
+    WD.gateBlock=addCol(-47.2,30.6,-40.8,31.6,false);WD.schoolGate=addCol(1.9,23.6,5.1,24.75,false);
     for(const m of ALLMB)m.build();
   }]);
   let i=0;const bar=document.querySelector('#loadbar i'),txt=$('loadtxt');
@@ -1883,10 +2066,41 @@ function playCards(list,final){
     setTimeout(()=>{big.classList.remove('on');mid.classList.remove('on');setTimeout(nx,1300)},c.dur||4600);
   })();
 }
+/* ---------- chapters & set pieces ---------- */
+function chapter(big,mid,cb){
+  G.mode='cut';TOUCH.mv.id=TOUCH.lk.id=null;stickHide();if(document.pointerLockElement)document.exitPointerLock();
+  fadeTo(1,.7);setTimeout(()=>card({big:big,mid:mid,dur:2800},()=>{fadeTo(0,1.4);G.mode='play';if(!isTouch)tryLock();if(cb)cb()}),800);
+}
+function ringLoop(){
+  if(!F.phoneRing||F.phoneDone)return;
+  const P=[-33,1.3,23];for(let k=0;k<10;k++)AU.tone({f:k%2?480:440,d:.05,v:.1,delay:k*.06,type:'square',lp:2200,pos:P});
+  later(3.4,ringLoop);
+}
+function shrineScare(){
+  later(1.4,()=>{for(const l of WD.shrineLights)l.k=0;G.cic=0;AU.thud(.35,[SHR.cx,1,12]);say('석등의 불이 일제히 꺼졌다.');G.fearB=.6});
+  for(let i=0;i<9;i++)later(3.2+i*.72,()=>{const P=G.pos,d=Math.max(1.3,13-i*1.4);AU.step('dirt',.95,[P[0]+(Math.random()-.5)*.6,.1,P[2]+d])});
+  later(10.2,()=>{say('발소리가 등 뒤에서 멈췄다.');AU.whisper([G.pos[0],1.3,G.pos[2]+1.0],.9);G.fearB=1});
+  later(13.5,()=>{for(const l of WD.shrineLights)l.k=.6;G.cic=1;say('석등에 다시 불이 들어왔다.');say('자갈 위에는 발자국이 하나도 없다.');setObj('폐교로 간다 — 동쪽 끝')});
+}
+function moveCoin(to,dur){KK.from=[KK.pos[0],KK.pos[1]];KK.to=to;KK.t=0;KK.dur=dur;AU.burst({type:'bandpass',f:900,d:dur*.9,v:.07,q:3,pos:[KK.cx,.8,KK.cz]})}
+function startKokkuri(){
+  F.kokkuri=1;G.mode='cut';TOUCH.mv.id=TOUCH.lk.id=null;stickHide();
+  G.yawTarget=Math.atan2(KK.cx-G.pos[0],-(KK.cz-G.pos[2]));G.pitchTarget=-.8;
+  later(.8,()=>say('동전이 혼자서 움직이기 시작한다.'));
+  later(2.0,()=>moveCoin(KK.pts.tori,1.5));
+  later(4.2,()=>moveCoin(KK.pts.u,1.5));
+  later(6.4,()=>moveCoin(KK.pts.shi,1.4));
+  later(8.5,()=>moveCoin(KK.pts.ro,1.4));
+  later(10.4,()=>{say('"う · し · ろ"',3);G.fearB=1;G.blackT=5;G.flick=3;AU.heart(1)});
+  later(13.2,()=>{G.flick=0;ghostJump(1.0,true,()=>{moveCoin(KK.pts.yes,.8);say('의자를 끄는 소리가 멎었다. 동전은 처음 자리로 돌아와 있다.');say('"뒤"를 가리킨 이유를, 아직 알 수 없다.');ghostStartHunt(1.15,[18,28],10)})});
+}
 function ending(kind){
+  if(kind==='A'&&!(F.ema1&&F.ema2&&F.geta))kind='C';
   F.choice=true;G.mode='cut';show('choice',false);$('hud').classList.remove('on');
   const A=[{mid:'"…미안해."\n나는 열쇠를 내밀었다.\n사과는 한 해 늦게 도착하였다.'},
     {mid:'사에가 천천히 돌아섰다.\n처음으로 얼굴이 보였다.\n열두 살의 얼굴이었다.'},
+    {mid:'사에는 손바닥을 펼쳤다.\n작은 매미 허물 하나가 놓여 있었다.'},
+    {mid:'신사 뒷산에서 허물을 줍던 아침을,\n나는 그제야 떠올렸다.'},
     {mid:'"…늦었어."\n그렇게 말하며, 사에는 아주 조금 웃은 듯했다.'},
     {mid:'매미 소리가 다시 들렸다.\n창이 없는 방으로 새벽빛이 스며들었다.'},
     {mid:'다음 날 아침, 관리인 할머니는 수박 접시 하나를 말없이 치우셨다.'},
@@ -1898,10 +2112,17 @@ function ending(kind){
     {mid:'매미 소리만 밤새 그치지 않았다.'},
     {mid:'개학날, 출석부에서 이름이 하나 더 지워져 있었다.\n관리인 할머니는 그해부터 수박을 세 접시 올린다.'},
     {big:'닫힌 문',mid:'ENDING 2\n\n끝나지 않는 여름방학',dur:6000}];
+  const C=[{mid:'"…미안해."\n나는 열쇠를 내밀었다.'},
+    {mid:'사에는 돌아서지 않았다.'},
+    {mid:'"…내가 왜 기다렸는지,\n기억도 못 하면서."',dur:5200},
+    {mid:'문이 닫혔다.\n이번에는 안쪽에서, 아주 조용히.'},
+    {mid:'개학 날 아침, 나는 교실 문 앞에서 한참을 서 있었다.\n들어갈 수 없었다.'},
+    {mid:'그해 가을부터 나는\n매미 소리를 들을 수 없게 되었다.'},
+    {big:'닿지 않은 말',mid:'ENDING 3\n\n여름은 끝나지 않았다',dur:6000}];
   AU.tenOverride=0;
   if(kind==='B'){AU.slam([41,1,1.5]);G.flashW=1;AU.scream();G.fade=1;fadeTo(0,.01);setTimeout(()=>{fadeTo(1,1.2)},900)}
   else{AU.musicBox([74,77,81,79,77,74,76,79,82,81,79,76,74,77,81,86,84,81,79,77,74],.52,.09)}
-  setTimeout(()=>playCards(kind==='A'?A:B,()=>{show('card',true);const b=$('cardBtn');b.style.display='block';b.onclick=()=>location.reload()}),kind==='B'?2400:600);
+  setTimeout(()=>playCards(kind==='A'?A:kind==='C'?C:B,()=>{show('card',true);const b=$('cardBtn');b.style.display='block';b.onclick=()=>location.reload()}),kind==='B'?2400:600);
 }
 
 /* ---------- input ---------- */
@@ -1988,16 +2209,38 @@ function doInteract(){
     else openPrep();
   }
   else if(id==='sohee'){F.choice=true;G.mode='cut';TOUCH.mv.id=TOUCH.lk.id=null;stickHide();if(document.pointerLockElement)document.exitPointerLock();
-    GH.hold=true;GH.yaw=Math.atan2(G.pos[0]-GH.x,G.pos[2]-GH.z);G.yawTarget=Math.atan2(GH.x-G.pos[0],-(GH.z-G.pos[2]));say('사에.');show('choice',true);$('hud').classList.remove('on');AU.musicBox([62,65,69,67,65,62],.7,.07)}
+    GH.hold=true;GH.yaw=Math.atan2(G.pos[0]-GH.x,G.pos[2]-GH.z);G.yawTarget=Math.atan2(GH.x-G.pos[0],-(GH.z-G.pos[2]));say('사에.');if(!(F.ema1&&F.ema2&&F.geta))say('전하지 못한 말이 아직 남아 있는 것 같다.');show('choice',true);$('hud').classList.remove('on');AU.musicBox([62,65,69,67,65,62],.7,.07)}
+  else if(id==='phone'){
+    if(F.phoneRing&&!F.phoneDone){F.phoneDone=1;F.phoneRing=false;AU.click();
+      say('수화기에서 지직거리는 잡음이 났다.');say('멀리서 학교 차임벨이 울린다. 그 뒤로 매미 소리.');say('누군가 숨을 고르고 있다. 아주 어린 숨소리.');
+      say('"…케이. 열쇠, 아직 가지고 있지?"',4);say('"약속했잖아. 신사 뒷산에서… 허물 줍기로."',4.5);say('통화가 끊겼다. 수화기가 얼음처럼 차갑다.');
+      setObj('폐교로 간다 — 길가의 신사를 지나야 한다');G.fearB=.8;later(6,()=>AU.whisper([G.pos[0],1.3,G.pos[2]+1.2],.5))}
+    else say(F.phoneDone?'신호음이 없다. 선은 오래전에 끊긴 듯하다.':'수화기를 들었지만 아무 소리도 나지 않는다.')}
+  else if(id==='vend'){say('모든 칸에 매진 표시가 켜져 있다.');say('반환구에서 동전이 굴러 떨어지는 소리가 났다.');AU.tone({f:2600,f2:1800,d:.12,v:.05,delay:.4,pos:[-34.9,.3,21.5]})}
+  else if(id==='shopnote')showNote(NOTE.shop[0],NOTE.shop[1],()=>{once('shopn',()=>{say('폐점은 작년 여름의 일이다.');say('전화기는 아직 가게 앞에 남아 있다.')})});
+  else if(id==='temizu'){say('물이 말라 있다. 국자 위에 매미 허물이 얹혀 있다.')}
+  else if(id==='ema1')showNote(NOTE.ema1[0],NOTE.ema1[1],()=>{once('e1',()=>{F.ema1=1;say('사에는 이 신사에 소원을 걸어 두었다.');say('케이라는 이름은, 나의 이름이다.')})});
+  else if(id==='ema2')showNote(NOTE.ema2[0],NOTE.ema2[1],()=>{once('e2',()=>{F.ema2=1;say('8월 3일. 사에가 발견되기 한 달 전이다.');say('켄타는 그때 이미 알고 있었다.')})});
+  else if(id==='bell'){for(let i=0;i<8;i++)AU.tone({f:1800+Math.random()*1800,d:.28,v:.05,delay:i*.045,pos:[SHR.cx,2.3,-1.4]});
+    once('bell',()=>later(2.8,()=>{AU.thud(.3,[-20,2.5,-14]);AU.tone({f:1900,d:.8,v:.04,pos:[-20,3,-14]});say('방울 소리가 한 번 더 울렸다.');say('이쪽에서 울린 소리가 아니다.')}))}
+  else if(id==='saisen'){say('새전함 안에서 동전이 굴러다니는 소리가 났다.');say('뚜껑은 닫혀 있다.')}
+  else if(id==='omamori'){takeItem(it);F.omamori=1;toast('부적을 얻었다 — 위험할 때 한 번 지켜 준다');say('"무사히 돌아오기를" — 부적에는 그렇게 적혀 있다.');
+    if(WD.schoolGate){WD.schoolGate[0]=WD.schoolGate[1]=WD.schoolGate[2]=WD.schoolGate[3]=-999}shrineScare()}
+  else if(id==='geta')showNote(NOTE.geta[0],NOTE.geta[1],()=>{it.done=true;F.geta=1;
+    for(let i=0;i<5;i++)later(.4+i*.17,()=>AU.thud(.5,[.4,1,.5+i*.6]));G.flick=1.2;G.glitch=.4;later(1.4,()=>{G.flick=0});
+    say('신발장의 문이 일제히 덜컹거렸다.');say('이름표에는 "사에"라고 적혀 있다.');say('이 학교에는 이미 아무도 없는데.')})
+  else if(id==='kokkuri'){if(F.kokkuri)say('종이 위의 동전은 처음 자리에 놓여 있다.');else showNote(NOTE.kok[0],NOTE.kok[1],()=>startKokkuri())}
   else if(id.startsWith('door:')){const d=it.door;if(d.stuck){AU.thud(.5,[d.hx+.5,1,d.hz]);say('문이 열리지 않는다.');return}d.fast=false;d.target=1.5;AU.creak(1.3,[d.hx+.5,1.1,d.hz])}
 }
 function checkpoint(x,z,yaw){G.cp={x:x,z:z,yaw:yaw}}
 function onClue(n){
   const left=3-G.cnt;
   if(n===1){say('열쇠를 쥐었던 손이 떨린다.');checkpoint(8.5,1.5,Math.PI);G.fearB=.5;setObj('사에의 흔적을 더 찾는다 ('+G.cnt+'/3)');
-    later(2.5,()=>{AU.thud(.7,[3,1,1.5]);say('등 뒤에서 문이 삐걱거리는 소리가 났다.')})}
-  else if(n===2){checkpoint(17.7,1.5,Math.PI);ghostStartHunt(1.25,[14,22],5);G.blackT=7;G.fearB=1;setObj('사에의 흔적을 더 찾는다 ('+G.cnt+'/3)');say('전등이 모두 꺼졌다.');say('누군가 이쪽을 보고 있다.');
-    later(1,()=>{AU.whisper([G.pos[0]-Math.sin(G.yaw)*1.5,1.3,G.pos[2]+Math.cos(G.yaw)*1.5],.9)})}
+    later(2.5,()=>{AU.thud(.7,[3,1,1.5]);say('등 뒤에서 문이 삐걱거리는 소리가 났다.')});
+    later(9,()=>{AU.bell(.1,[20,3,1.5]);say('복도 스피커에서 잡음이 새어 나온다.');say('출석을 부르는 낮은 목소리. 이름이 하나씩 이어진다.');say('사에의 차례에서, 목소리가 멈췄다.',4);G.fearB=.9})}
+  else if(n===2){checkpoint(17.7,1.5,Math.PI);G.blackT=7;G.fearB=1;setObj('사에의 흔적을 더 찾는다 ('+G.cnt+'/3)');say('전등이 모두 꺼졌다.');say('누군가 이쪽을 보고 있다.');
+    later(1,()=>{AU.whisper([G.pos[0]-Math.sin(G.yaw)*1.5,1.3,G.pos[2]+Math.cos(G.yaw)*1.5],.9)});
+    later(6.4,()=>{const go=()=>{if(G.mode!=='play'){later(.8,go);return}ghostJump(1.35,false,()=>{ghostStartHunt(1.25,[14,22],7)})};go()})}
   else if(n===3){setObj('교무실 열쇠함에서 준비실 열쇠를 찾는다');ghostStartHunt(1.5,[11,17],3);G.fearB=1;G.glitch=.6;
     say('도쿄에서 내려온 아이. 열쇠를 쥐고 있던 아이.');say('그것은 나였다.');say('종업식 날, 켄타가 열쇠를 내밀며 말했다.');say('"도쿄 녀석, 이거 하나만 잠가 봐. 딱 5분만."');
     say('철컥. 웃음소리. 모두 집으로 돌아갔고, 아무도 돌아오지 않았다.');say('나는 그 여름을 통째로 잊고 있었다.',4);
@@ -2113,8 +2356,10 @@ function worldEvents(dt){
   if(!G.has.flash&&z<32.4&&x>-48&&x<-40&&!F.noflash){F.noflash=1;say('손전등을 먼저 챙겨야 한다. 툇마루 위에 두었던 것으로 기억한다.')}
   if(!G.has.flash&&z>33)F.noflash=0;
   // road
-  if(G.has.flash&&x>-52&&z<32.5)once('road0',()=>{say('학교는 이 길 끝, 논을 지나 동쪽에 있다.');setObj('폐교로 간다 — 길을 따라 동쪽으로');checkpoint(-44,36,2.2)});
-  if(x>-36&&z>24&&z<32)once('hush',()=>{G.cic=0;say('매미 소리가 그쳤다.');AU.bell(.12,[30,6,-4])});
+  if(G.has.flash&&x>-52&&z<32.5)once('road0',()=>{say('학교는 이 길 끝, 논을 지나 동쪽에 있다.');setObj('폐교로 간다 — 길을 따라 동쪽으로, 가는 길에 신사에 들른다');checkpoint(-44,36,2.2)});
+  if(x>-36&&z>24&&z<32)once('hush',()=>{G.cic=0;say('매미 소리가 그쳤다.');AU.bell(.12,[30,6,-4]);later(3,()=>{F.phoneRing=true;say('가게 앞에서 전화벨이 울린다.');ringLoop()})});
+  if(x>-31&&x<-9&&z<23.8&&z>5)once('shrineEnter',()=>chapter('제2장','신사',()=>{say('참배길에는 자갈이 깔려 있다. 걸음마다 소리가 난다.');say('석등에 불이 켜져 있다. 켜 둔 사람은 없는데.');setObj('신사를 둘러본다 — 에마와 부적')}));
+  if(!F.omamori&&x>.3&&x<6&&z<25.8&&z>23&&G.time>(F.gateT||0)){F.gateT=G.time+14;say('정문 앞에서 발이 떨어지지 않는다.');say('켄타의 쪽지에 적힌 대로, 신사에 먼저 들러야 한다.')}
   if(x>-24&&z>24&&z<32)once('road1',()=>{F.follow=true;F.roadDone=1;G.fearB=.35;say('걸음을 옮길 때마다 뒤에서 한 박자 늦게 발소리가 따라온다.',3.6);later(14,()=>{if(WD.lamps[2])WD.lamps[2].dead=true})});
   if(x>-3&&z>20)once('gate',()=>{F.follow=false;say('켄타의 자전거. 라이트가 아직 켜져 있다.');say('미카즈키 초등학교. 올봄에 폐교되었다.');setObj('학교 현관으로 들어간다');checkpoint(3.2,22,0);G.swingAmp=.5;G.cic=1;
     if(!F.roadDone){G.cic=1}});
@@ -2126,7 +2371,7 @@ function worldEvents(dt){
       if(d<9)once('statue',()=>say('니노미야 킨지로 동상이 향한 방향이 아까와 다르다.'))}
   }
   // school entry
-  if(z<3.9&&x>1.5&&x<5)once('entry',()=>{G.cic=.25;G.fluorBad=true;AU.bell(.32);say('폐교에서 학교 차임벨이 울렸다.');later(5,()=>{G.fluorBad=false});setObj('켄타를 찾는다 — 교실, 보건실, 이과실, 교무실');checkpoint(3.2,1.8,Math.PI/2)});
+  if(z<3.9&&x>1.5&&x<5)once('entry',()=>chapter('제3장','폐교',()=>{G.cic=.25;G.fluorBad=true;AU.bell(.32);say('폐교에서 학교 차임벨이 울렸다.');later(5,()=>{G.fluorBad=false});setObj('켄타를 찾는다 — 교실, 보건실, 이과실, 교무실');checkpoint(3.2,1.8,Math.PI/2)}));
   if(G.inSchool&&x>27&&z>0&&z<3)once('corr1',()=>{const d=WD.dMed;d.fast=false;d.target=1.5;AU.creak(1.6,[17.75,1,-.2]);G.fearB=.4;later(1.2,()=>say('지나온 보건실 문이 열려 있다. 지나올 때에는 닫혀 있었다.'))});
   // classroom slam
   if(inRoom(WD.rooms.cls,x,z)&&z<-1.1&&x>6)once('slam',()=>{const d=WD.dClass;d.fast=true;d.target=0;d.stuck=true;later(.15,()=>AU.slam([8.5,1,-.2]));G.blackT=6;G.fearB=1;G.glitch=1;
@@ -2206,6 +2451,8 @@ function update(dt){
   // dynamic objs
   for(const s of WD.swings){const a=G.swingAmp*Math.sin(t*1.15+s.ph);s.m=M4.trs(s.x,s.y,s.z,0,a,0,1)}
   if(G.swingAmp>.05)G.swingAmp=Math.max(.05,G.swingAmp-dt*.03);
+  if(KK.to){KK.t+=dt;const k=Math.min(1,KK.t/KK.dur),e=k*k*(3-2*k);KK.pos=[lerp(KK.from[0],KK.to[0],e)+(Math.random()-.5)*.0012,lerp(KK.from[1],KK.to[1],e)+(Math.random()-.5)*.0012];if(k>=1)KK.to=null}
+  if(WD.coin)WD.coin.m=M4.trs(KK.pos[0],KK.y+.001,KK.pos[1],0,0,0,1);
   if(WD.statue)WD.statue.m=M4.trs(WD.statue.x,WD.statue.y,WD.statue.z,WD.statue.yawv||0,0,0,1);
   for(const k of Object.keys(WD.it)){const o=WD.it[k];if(o&&(k.startsWith('d')||k==='clip'||k.startsWith('note'))&&o.vis)o.emis=.4+.15*Math.sin(t*2.3+o.x)}
   WD.tvPanel.tint=[.4+.3*Math.abs(Math.sin(t*9))*.9,.55+.3*Math.abs(Math.sin(t*7.3)),.9+.25*Math.sin(t*13)];
